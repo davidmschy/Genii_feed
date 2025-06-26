@@ -28,51 +28,130 @@ class FeedState extends AppState {
 
   List<FeedModel>? _feedList;
   database.Query? _feedQuery;
-  List<FeedModel>? _tweetDetailModelList;
+  List<FeedModel>? _tweetDetailModelList; // This seems to be for detail view, not the main list
 
-  List<FeedModel>? get tweetDetailModel => _tweetDetailModelList;
+  List<FeedModel>? get tweetDetailModel => _tweetDetailModelList; // Retaining for compatibility if used elsewhere
 
-  /// `feedList` always [contain all tweets] fetched from firebase database
-  List<FeedModel>? get feedList {
+  // Filtering states
+  String? _propertyFilterId;
+  String? _roleFilter; // User's current active role for filtering
+  String? _agentFilterId;
+  String? _postTypeFilter;
+
+  // Getters for filters (optional, mainly for external read if needed)
+  String? get propertyFilterId => _propertyFilterId;
+  String? get roleFilter => _roleFilter;
+  String? get agentFilterId => _agentFilterId;
+  String? get postTypeFilter => _postTypeFilter;
+
+  // Setters for filters
+  void setPropertyFilter(String? propertyId) {
+    _propertyFilterId = propertyId;
+    notifyListeners(); // Trigger list refresh
+  }
+
+  void setRoleFilter(String? role) {
+    _roleFilter = role;
+    notifyListeners();
+  }
+
+  void setAgentFilter(String? agentId) {
+    _agentFilterId = agentId;
+    notifyListeners();
+  }
+
+  void setPostTypeFilter(String? postType) {
+    _postTypeFilter = postType;
+    notifyListeners();
+  }
+
+  void clearFilters() {
+    _propertyFilterId = null;
+    _roleFilter = null;
+    _agentFilterId = null;
+    _postTypeFilter = null;
+    notifyListeners();
+  }
+
+  /// `feedList` always [contain all GeniiPosts] fetched from firebase database
+  /// This is the raw, unfiltered list, reversed by time.
+  List<FeedModel>? get rawFeedList {
     if (_feedList == null) {
       return null;
     } else {
-      return List.from(_feedList!.reversed);
+      return List.from(_feedList!.reversed); // Newest first
     }
   }
 
-  /// contain tweet list for home page
-  List<FeedModel>? getTweetList(UserModel? userModel) {
-    if (userModel == null) {
+  /// Contain GeniiPost list for home page, applying current filters.
+  /// Renamed from getTweetList to getPostList.
+  List<FeedModel>? getPostList(UserModel? currentUser) {
+    // currentUser might be used for role-based filtering or "my posts"
+    // For now, the userModel param is not directly used in these conceptual filters,
+    // but it's kept for future use (e.g. if _roleFilter is derived from currentUser.activeRole)
+
+    if (rawFeedList == null || rawFeedList!.isEmpty) {
       return null;
     }
 
-    List<FeedModel>? list;
+    List<FeedModel> filteredList = List.from(rawFeedList!);
 
-    if (!isBusy && feedList != null && feedList!.isNotEmpty) {
-      list = feedList!.where((x) {
-        /// If Tweet is a comment then no need to add it in tweet list
-        if (x.parentkey != null &&
-            x.childRetwetkey == null &&
-            x.user!.userId != userModel.userId) {
-          return false;
+    // Conceptual filtering logic:
+    // These will be actual .where clauses when fully implemented.
+
+    // 1. Filter by Property ID
+    if (_propertyFilterId != null) {
+      // filteredList = filteredList.where((post) => post.propertyId == _propertyFilterId).toList();
+      cprint("Conceptual: Filtering by property ID: $_propertyFilterId");
+    }
+
+    // 2. Filter by Post Type
+    if (_postTypeFilter != null) {
+      // filteredList = filteredList.where((post) => post.postType == _postTypeFilter).toList();
+      cprint("Conceptual: Filtering by post type: $_postTypeFilter");
+    }
+
+    // 3. Filter by Agent ID
+    if (_agentFilterId != null) {
+      // filteredList = filteredList.where((post) => post.agentId == _agentFilterId).toList();
+      cprint("Conceptual: Filtering by agent ID: $_agentFilterId");
+    }
+
+    // 4. Filter by Role (This is more complex and might involve checking post visibility against user's role)
+    //    For example, a contractor might only see TaskUpdate posts relevant to them.
+    //    An investor might see CashFlowEvent and LoanUpdate posts.
+    //    This will likely depend on the currentUser.activeRole and rules defined per postType.
+    if (_roleFilter != null) {
+      // This is a placeholder for more complex logic.
+      // For instance, if _roleFilter is "Contractor", we might only show "TaskUpdate" posts
+      // or posts where the currentUser.userId is involved based on their role.
+      // if (_roleFilter == "Contractor") {
+      //   filteredList = filteredList.where((post) => post.postType == PostTypes.TaskUpdate /* && isRelevantToContractor(post, currentUser) */).toList();
+      // }
+      cprint("Conceptual: Filtering by role: $_roleFilter (actual logic will be more involved)");
+    }
+
+    // Original logic from getTweetList (related to comments and specific user posts)
+    // This might need re-evaluation in the context of GeniiPosts.
+    // For now, I'm commenting it out as the new filters take precedence for this step.
+    /*
+    if (currentUser != null) {
+      filteredList = filteredList.where((x) {
+        /// If Post is a comment then no need to add it in main feed list (unless it's a reply to a prompt?)
+        if (x.parentkey != null && x.childRetwetkey == null && x.user!.userId != currentUser.userId) {
+          // This logic might change depending on how replies/comments work for GeniiPosts
+          // return false;
         }
-
-        /// Only include Tweets of logged-in user's and his following user's
-        // if (x.user!.userId == userModel.userId ||
-        //     (userModel.followingList != null &&
-        //         userModel.followingList!.contains(x.user!.userId))) {
-        //   return true;
-        // } else {
-        //   return false;
-        // }
         return true;
       }).toList();
-      if (list.isEmpty) {
-        list = null;
-      }
     }
-    return list;
+    */
+
+    if (filteredList.isEmpty) {
+      return null;
+    }
+
+    return filteredList;
   }
 
   Map<String, dynamic> _linkWebInfos = {};

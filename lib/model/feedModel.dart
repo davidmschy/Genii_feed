@@ -24,6 +24,9 @@ class FeedModel {
   String? postType; // e.g., "Tweet", "TrustDistributionEvent"
   Map<String, dynamic>? eventPayload; // Stores specific data for custom post types
   String? propertyId; // Optional: associated property ID for any post
+  String? agentId; // Optional: associated AI agent ID
+  String? status; // Optional: e.g., "Open", "InProgress", "Resolved"
+  int? priority; // Optional: e.g., 1-5
 
   FeedModel({
     this.key,
@@ -44,6 +47,9 @@ class FeedModel {
     this.postType = "Tweet", // Default to "Tweet" for existing posts
     this.eventPayload,
     this.propertyId,
+    this.agentId,
+    this.status,
+    this.priority,
   });
 
   toJson() {
@@ -65,6 +71,9 @@ class FeedModel {
       "postType": postType,
       "eventPayload": eventPayload,
       "propertyId": propertyId,
+      "agentId": agentId,
+      "status": status,
+      "priority": priority,
     };
   }
 
@@ -94,6 +103,10 @@ class FeedModel {
     postType = map['postType'] ?? "Tweet"; // Default to "Tweet" if not present
     eventPayload = map['eventPayload'] != null ? Map<String, dynamic>.from(map['eventPayload']) : null;
     propertyId = map['propertyId'];
+    agentId = map['agentId'];
+    status = map['status'];
+    priority = map['priority'];
+
 
     if (map['tags'] != null) {
       tags = <String>[];

@@ -77,7 +77,8 @@ class _FeedPageBody extends StatelessWidget {
     var authState = Provider.of<AuthState>(context, listen: false);
     return Consumer<FeedState>(
       builder: (context, state, child) {
-        final List<FeedModel>? list = state.getTweetList(authState.userModel);
+        // Updated to use getPostList
+        final List<FeedModel>? list = state.getPostList(authState.userModel);
         return CustomScrollView(
           slivers: <Widget>[
             child!,
