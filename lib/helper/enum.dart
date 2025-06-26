@@ -45,3 +45,23 @@ class PostTypes {
   static const String ServiceMatch = "ServiceMatch"; // For TaskRabbit, Angi, etc.
   static const String RentalUpdate = "RentalUpdate"; // For Airbnb, Vrbo, etc. (mentioned in API section of prompt)
 }
+
+// String constants for User Roles
+class UserRoles {
+  static const String Owner = "Owner";
+  static const String Agent = "Agent"; // Real estate agent or AI agent controller
+  static const String Contractor = "Contractor";
+  static const String Investor = "Investor";
+  static const String Lender = "Lender";
+  static const String Manufacturer = "Manufacturer"; // Or Supplier
+  static const String Tenant = "Tenant"; // Added Tenant as it's a common role in real estate
+  static const String Admin = "Admin"; // System administrator
+}
+
+// String constants for AI Agent Types
+class AgentTypes {
+  static const String DealHunter = "DealHunter";
+  static const String TaskManager = "TaskManager";
+  static const String Concierge = "Concierge";
+  // Add any other specific agent types here
+}

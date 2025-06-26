@@ -22,28 +22,35 @@ class UserModel extends Equatable {
   List<String>? followersList;
   List<String>? followingList;
 
-  UserModel(
-      {this.email,
-      this.userId,
-      this.displayName,
-      this.profilePic,
-      this.bannerImage,
-      this.key,
-      this.contact,
-      this.bio,
-      this.dob,
-      this.location,
-      this.createdAt,
-      this.userName,
-      this.followers,
-      this.following,
-      this.webSite,
-      this.isVerified,
-      this.fcmToken,
-      this.followersList,
-      this.followingList});
+  // New fields for Genii Feed User Roles
+  List<String> roles;
+  String? currentRole;
 
-  UserModel.fromJson(Map<dynamic, dynamic>? map) {
+  UserModel({
+    this.email,
+    this.userId,
+    this.displayName,
+    this.profilePic,
+    this.bannerImage,
+    this.key,
+    this.contact,
+    this.bio,
+    this.dob,
+    this.location,
+    this.createdAt,
+    this.userName,
+    this.followers,
+    this.following,
+    this.webSite,
+    this.isVerified,
+    this.fcmToken,
+    this.followersList,
+    this.followingList,
+    List<String>? roles, // Made roles an optional named parameter
+    this.currentRole,
+  }) : roles = roles ?? []; // Initialize roles to an empty list if null
+
+  UserModel.fromJson(Map<dynamic, dynamic>? map) : roles = [] { // Initialize roles here too
     if (map == null) {
       return;
     }
@@ -79,7 +86,16 @@ class UserModel extends Equatable {
       });
     }
     following = followingList != null ? followingList!.length : null;
+
+    // Deserialize roles and currentRole
+    if (map['roles'] != null) {
+      roles = List<String>.from(map['roles']);
+    } else {
+      roles = []; // Ensure roles is initialized even if not in JSON
+    }
+    currentRole = map['currentRole'];
   }
+
   toJson() {
     return {
       'key': key,
@@ -100,7 +116,10 @@ class UserModel extends Equatable {
       'isVerified': isVerified ?? false,
       'fcmToken': fcmToken,
       'followerList': followersList,
-      'followingList': followingList
+      'followingList': followingList,
+      // Serialize new fields
+      'roles': roles,
+      'currentRole': currentRole,
     };
   }
 
@@ -124,6 +143,8 @@ class UserModel extends Equatable {
     String? fcmToken,
     List<String>? followingList,
     List<String>? followersList,
+    List<String>? roles,
+    String? currentRole,
   }) {
     return UserModel(
       email: email ?? this.email,
@@ -145,6 +166,8 @@ class UserModel extends Equatable {
       fcmToken: fcmToken ?? this.fcmToken,
       followersList: followersList ?? this.followersList,
       followingList: followingList ?? this.followingList,
+      roles: roles ?? this.roles,
+      currentRole: currentRole ?? this.currentRole,
     );
   }
 

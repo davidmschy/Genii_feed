@@ -157,12 +157,44 @@ class FeedModel {
     }
   }
 
+  /// Helper method to get a typed payload.
+  ///
+  /// Example usage:
+  /// `var specificPayload = model.getPayload<MyPayloadType>(MyPayloadType.fromJson);`
+  /// `if (specificPayload != null) { ... }`
+  T? getPayload<T>(T Function(Map<String, dynamic> json) fromJson) {
+    if (eventPayload == null) {
+      return null;
+    }
+    try {
+      return fromJson(eventPayload!);
+    } catch (e) {
+      print("Error deserializing payload for post $key, type $postType: $e");
+      return null;
+    }
+  }
+
   bool get isValidTweet {
     bool isValid = false;
+    // For GeniiPost, the definition of "valid" might change.
+    // A post might be valid even without a user if it's a system-generated event.
+    // For now, we keep the original logic, but this might need revisiting based on postType.
     if (user != null && user!.userName != null && user!.userName!.isNotEmpty) {
       isValid = true;
     } else {
-      print("Invalid Tweet found. Id:- $key");
+      // Only print "Invalid Tweet" if it's actually supposed to be a tweet.
+      // For other post types, missing user might be acceptable.
+      if (postType == "Tweet") { // Assuming "Tweet" is the constant for old tweets
+         print("Invalid Tweet found (missing user details). Id:- $key");
+      } else {
+        // For other GeniiPost types, user might be optional or a system user.
+        // We can assume it's valid if it has a postType and an ID (key).
+        if (key != null && postType != null) {
+          isValid = true;
+        } else {
+          print("Invalid GeniiPost found (missing key or postType). Id:- $key, Type: $postType");
+        }
+      }
     }
     return isValid;
   }
