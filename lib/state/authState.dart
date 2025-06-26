@@ -454,4 +454,32 @@ class AuthState extends AppState {
       notifyListeners();
     }
   }
+
+  /// Update the user's current active role and persist it to Firebase.
+  Future<void> updateUserCurrentRole(String newRole) async {
+    if (_userModel == null) {
+      cprint("Cannot update current role: userModel is null.", errorIn: "updateUserCurrentRole");
+      return;
+    }
+
+    // Check if the newRole is actually one of the user's assigned roles.
+    // This is good practice, though the UI should ideally only present valid roles.
+    if (!_userModel!.roles.contains(newRole) && _userModel!.roles.isNotEmpty) {
+        // If roles list is not empty and newRole is not in it, perhaps default to first role or log warning.
+        // For now, we'll allow setting it, but this could be a point of validation.
+        cprint("Warning: Setting currentRole to '$newRole' which is not in user's roles list: ${_userModel!.roles}", warningIn: "updateUserCurrentRole");
+    }
+
+    _userModel!.currentRole = newRole;
+
+    try {
+      // The existing createUser method updates the profile in Firebase.
+      createUser(_userModel!);
+      cprint("User's current role updated to: $newRole and saved to Firebase.");
+      notifyListeners(); // Notify listeners after successful update.
+    } catch (e) {
+      cprint("Error saving user model after updating current role: $e", errorIn: "updateUserCurrentRole");
+      // Optionally, revert _userModel.currentRole or handle error appropriately.
+    }
+  }
 }

@@ -10,6 +10,7 @@ import 'package:flutter_twitter_clone/ui/page/profile/widgets/circular_image.dar
 import 'package:flutter_twitter_clone/ui/theme/theme.dart';
 import 'package:flutter_twitter_clone/widgets/newWidget/title_text.dart';
 import 'package:intl/intl.dart'; // For currency formatting
+import 'package:flutter_twitter_clone/widgets/post/genii_post_widget.dart'; // Import GeniiPostWidget
 import 'package:flutter_twitter_clone/widgets/tweet/widgets/parentTweet.dart';
 import 'package:flutter_twitter_clone/widgets/tweet/widgets/tweetIconsRow.dart';
 import 'package:flutter_twitter_clone/widgets/url_text/customUrlText.dart';
@@ -17,12 +18,743 @@ import 'package:flutter_twitter_clone/widgets/url_text/custom_link_media_info.da
 import 'package:provider/provider.dart';
 
 import '../customWidgets.dart';
+import 'widgets/retweetWidget.dart'; // Ensure these are here, they might have been pushed down
+import 'widgets/tweetImage.dart'; // Ensure these are here
 import 'widgets/retweetWidget.dart';
 import 'widgets/tweetImage.dart';
 
 class Tweet extends StatelessWidget {
   final FeedModel model;
   final Widget? trailing;
+}
+
+class _ExternalApiCard extends StatelessWidget {
+  final FeedModel model;
+  final TweetType type;
+  final Widget? trailing;
+  final bool isDisplayOnProfile;
+
+  const _ExternalApiCard({
+    Key? key,
+    required this.model,
+    required this.type,
+    this.trailing,
+    required this.isDisplayOnProfile,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final payload = model.eventPayload;
+    if (payload == null) {
+      return const SizedBox.shrink();
+    }
+
+    final source = payload['source'] as String?; // e.g., "Zillow", "Airbnb", "Public Weather API"
+    final title = payload['title'] as String?;
+    final summary = payload['summary'] as String?;
+    final url = payload['url'] as String?;
+    // final data = payload['data'] as Map<String, dynamic>?; // For more complex data, not rendered by this generic card
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Row
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Theme.of(context).colorScheme.secondary.withAlpha(50),
+                  ),
+                  child: Icon(
+                    AppIcon.link, // Generic icon for external link/API
+                    color: Theme.of(context).colorScheme.secondary,
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                     Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: <Widget>[
+                          Expanded(
+                            child: TitleText(source ?? "External Update", // Show source or generic title
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          customText(
+                            '· ${Utility.getChatTime(model.createdAt)}',
+                            style: TextStyles.userNameStyle.copyWith(fontSize: 12),
+                          ),
+                          Container(child: trailing ?? const SizedBox.shrink()),
+                        ],
+                      ),
+                    if (model.user != null) // If a user posted this (e.g. via an agent action)
+                       customText(
+                        'Triggered by: @${model.user!.userName}',
+                        style: TextStyles.userNameStyle.copyWith(fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // External API Content
+          if (title != null && title.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6.0),
+              child: Text(title, style: TextStyles.titleStyle.copyWith(fontSize: 17)),
+            ),
+
+          if (summary != null && summary.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Text(summary, style: TextStyles.textStyle14, maxLines: 3, overflow: TextOverflow.ellipsis,),
+            ),
+
+          if (url != null && url.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: InkWell(
+                onTap: () async {
+                  // ignore: deprecated_member_use
+                  if (await canLaunch(url)) {
+                    // ignore: deprecated_member_use
+                    await launch(url);
+                  } else {
+                    cprint('Could not launch $url');
+                     ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Could not launch URL: $url')),
+                      );
+                  }
+                },
+                child: Text(
+                  url,
+                  style: TextStyles.textStyle14.copyWith(color: TwitterColor.bondyBlue, decoration: TextDecoration.underline),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+
+          // The 'data' field is not explicitly rendered here as it's generic.
+          // Specific post types should be created if detailed rendering of 'data' is needed.
+
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExternalApiCard extends StatelessWidget {
+  final FeedModel model;
+  final TweetType type;
+  final Widget? trailing;
+  final bool isDisplayOnProfile;
+
+  const _ExternalApiCard({
+    Key? key,
+    required this.model,
+    required this.type,
+    this.trailing,
+    required this.isDisplayOnProfile,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final payload = model.eventPayload;
+    if (payload == null) {
+      return const SizedBox.shrink();
+    }
+
+    final source = payload['source'] as String?; // e.g., "Zillow", "Airbnb", "Public Weather API"
+    final title = payload['title'] as String?;
+    final summary = payload['summary'] as String?;
+    final url = payload['url'] as String?;
+    // final data = payload['data'] as Map<String, dynamic>?; // For more complex data, not rendered by this generic card
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Row
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Theme.of(context).colorScheme.secondary.withAlpha(50),
+                  ),
+                  child: Icon(
+                    AppIcon.link, // Generic icon for external link/API
+                    color: Theme.of(context).colorScheme.secondary,
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                     Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: <Widget>[
+                          Expanded(
+                            child: TitleText(source ?? "External Update", // Show source or generic title
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          customText(
+                            '· ${Utility.getChatTime(model.createdAt)}',
+                            style: TextStyles.userNameStyle.copyWith(fontSize: 12),
+                          ),
+                          Container(child: trailing ?? const SizedBox.shrink()),
+                        ],
+                      ),
+                    if (model.user != null) // If a user posted this (e.g. via an agent action)
+                       customText(
+                        'Triggered by: @${model.user!.userName}',
+                        style: TextStyles.userNameStyle.copyWith(fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // External API Content
+          if (title != null && title.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6.0),
+              child: Text(title, style: TextStyles.titleStyle.copyWith(fontSize: 17)),
+            ),
+
+          if (summary != null && summary.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Text(summary, style: TextStyles.textStyle14, maxLines: 3, overflow: TextOverflow.ellipsis,),
+            ),
+
+          if (url != null && url.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: InkWell(
+                onTap: () async {
+                  // ignore: deprecated_member_use
+                  if (await canLaunch(url)) {
+                    // ignore: deprecated_member_use
+                    await launch(url);
+                  } else {
+                    cprint('Could not launch $url');
+                     ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Could not launch URL: $url')),
+                      );
+                  }
+                },
+                child: Text(
+                  url,
+                  style: TextStyles.textStyle14.copyWith(color: TwitterColor.bondyBlue, decoration: TextDecoration.underline),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+
+          // The 'data' field is not explicitly rendered here as it's generic.
+          // Specific post types should be created if detailed rendering of 'data' is needed.
+
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _ServiceMatchCard extends StatelessWidget {
+  final FeedModel model;
+  final TweetType type;
+  final Widget? trailing;
+  final bool isDisplayOnProfile;
+
+  const _ServiceMatchCard({
+    Key? key,
+    required this.model,
+    required this.type,
+    this.trailing,
+    required this.isDisplayOnProfile,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final payload = model.eventPayload;
+    if (payload == null) {
+      return const SizedBox.shrink();
+    }
+
+    final serviceType = payload['serviceType'] as String?;
+    final providerName = payload['providerName'] as String?;
+    final contactInfo = payload['contactInfo'] as String?; // Could be phone, email, or profile link
+    final priceEstimate = payload['priceEstimate'] as String?; // e.g., "$50-100", "Quote Required"
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Row
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Theme.of(context).colorScheme.primary.withAlpha(50),
+                  ),
+                  child: Icon(
+                    AppIcon.settings, // Assuming an icon for services/tools
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                     Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: <Widget>[
+                          Expanded(
+                            child: TitleText("Service Match",
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          customText(
+                            '· ${Utility.getChatTime(model.createdAt)}',
+                            style: TextStyles.userNameStyle.copyWith(fontSize: 12),
+                          ),
+                          Container(child: trailing ?? const SizedBox.shrink()),
+                        ],
+                      ),
+                    // Display who posted this update if it's a user (e.g. an agent found this match)
+                    if (model.user != null)
+                       customText(
+                        'Match found by: @${model.user!.userName}',
+                        style: TextStyles.userNameStyle.copyWith(fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Service Match Details
+          if (serviceType != null)
+            _buildDetailRow(context, AppIcon.work, "Service:", serviceType, isBoldValue: true),
+
+          if (providerName != null)
+            _buildDetailRow(context, Icons.business_center_outlined, "Provider:", providerName),
+
+          if (contactInfo != null)
+            _buildDetailRow(context, Icons.contact_phone_outlined, "Contact:", contactInfo, isSelectable: true),
+
+          if (priceEstimate != null && priceEstimate.isNotEmpty)
+            _buildDetailRow(context, AppIcon.dollar, "Estimate:", priceEstimate),
+
+          const SizedBox(height: 8),
+          // Consider adding action buttons like "Contact Provider" or "View Profile"
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(BuildContext context, IconData icon, String label, String value, {bool isBoldValue = false, bool isSelectable = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: Colors.grey[700]),
+          const SizedBox(width: 10),
+          Text(label, style: TextStyles.subtitleStyle.copyWith(fontWeight: FontWeight.w600, fontSize: 15)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: isSelectable
+                ? SelectableText(value, style: TextStyles.subtitleStyle.copyWith(fontSize: 15, fontWeight: isBoldValue ? FontWeight.bold : FontWeight.normal))
+                : Text(value, style: TextStyles.subtitleStyle.copyWith(fontSize: 15, fontWeight: isBoldValue ? FontWeight.bold : FontWeight.normal)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TaskUpdateCard extends StatelessWidget {
+  final FeedModel model;
+  final TweetType type;
+  final Widget? trailing;
+  final bool isDisplayOnProfile;
+
+  const _TaskUpdateCard({
+    Key? key,
+    required this.model,
+    required this.type,
+    this.trailing,
+    required this.isDisplayOnProfile,
+  }) : super(key: key);
+
+  Color _getStatusColor(String? status) {
+    status = status?.toLowerCase();
+    if (status == 'completed' || status == 'done') {
+      return Colors.green.shade700;
+    } else if (status == 'in progress' || status == 'active') {
+      return Colors.blue.shade700;
+    } else if (status == 'pending' || status == 'todo' || status == 'to do') {
+      return Colors.orange.shade700;
+    } else if (status == 'blocked' || status == 'on hold') {
+      return Colors.red.shade700;
+    }
+    return Colors.grey.shade700;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final payload = model.eventPayload;
+    if (payload == null) {
+      return const SizedBox.shrink();
+    }
+
+    final taskName = payload['taskName'] as String?;
+    final status = payload['status'] as String?;
+    final contractorName = payload['contractorName'] as String?;
+    final percentComplete = (payload['percentComplete'] as num?)?.toDouble(); // Ensure it's a double
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Row
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Theme.of(context).colorScheme.primary.withAlpha(50),
+                  ),
+                  child: Icon(
+                    AppIcon.calender // Assuming an icon for tasks/calendar
+                         ?? Icons.task_alt_outlined, // Fallback icon
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                     Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: <Widget>[
+                          Expanded(
+                            child: TitleText("Task Update",
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          customText(
+                            '· ${Utility.getChatTime(model.createdAt)}',
+                            style: TextStyles.userNameStyle.copyWith(fontSize: 12),
+                          ),
+                          Container(child: trailing ?? const SizedBox.shrink()),
+                        ],
+                      ),
+                     // Display who posted this update if it's a user
+                    if (model.user != null)
+                       customText(
+                        'Update by: @${model.user!.userName}',
+                        style: TextStyles.userNameStyle.copyWith(fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Task Details
+          if (taskName != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6.0),
+              child: Text(taskName, style: TextStyles.titleStyle.copyWith(fontSize: 17)),
+            ),
+
+          if (status != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Row(
+                children: [
+                  Text("Status: ", style: TextStyles.textStyle14.copyWith(fontWeight: FontWeight.bold)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(status).withAlpha(30),
+                      borderRadius: BorderRadius.circular(6),
+                       border: Border.all(color: _getStatusColor(status).withAlpha(100), width: 0.5)
+                    ),
+                    child: Text(
+                      status,
+                      style: TextStyles.textStyle12.copyWith(color: _getStatusColor(status), fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          if (contractorName != null && contractorName.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Row(
+                children: [
+                  Icon(Icons.person_outline, size: 16, color: Colors.grey[700]),
+                  const SizedBox(width: 6),
+                  Text("Assigned to: ", style: TextStyles.textStyle14.copyWith(fontWeight: FontWeight.bold)),
+                  Expanded(child: Text(contractorName, style: TextStyles.textStyle14)),
+                ],
+              ),
+            ),
+
+          if (percentComplete != null) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4.0, top: 4.0),
+              child: Text("Progress: ${(percentComplete * 100).toStringAsFixed(0)}%", style: TextStyles.textStyle14.copyWith(fontWeight: FontWeight.bold)),
+            ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: percentComplete,
+                backgroundColor: Colors.grey[300],
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  percentComplete >= 1.0 ? Colors.green :
+                  percentComplete > 0.7 ? Colors.blue :
+                  percentComplete > 0.3 ? Colors.orange : Colors.red.shade300
+                ),
+                minHeight: 10,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoanUpdateCard extends StatelessWidget {
+  final FeedModel model;
+  final TweetType type;
+  final Widget? trailing;
+  final bool isDisplayOnProfile;
+
+  const _LoanUpdateCard({
+    Key? key,
+    required this.model,
+    required this.type,
+    this.trailing,
+    required this.isDisplayOnProfile,
+  }) : super(key: key);
+
+  // Helper to get status color
+  Color _getStatusColor(String? status) {
+    status = status?.toLowerCase();
+    if (status == 'approved' || status == 'funded') {
+      return Colors.green.shade700;
+    } else if (status == 'pending' || status == 'under review') {
+      return Colors.orange.shade700;
+    } else if (status == 'rejected' || status == 'denied') {
+      return Colors.red.shade700;
+    }
+    return Colors.grey.shade700;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final payload = model.eventPayload;
+    if (payload == null) {
+      return const SizedBox.shrink();
+    }
+
+    final lenderName = payload['lenderName'] as String?;
+    final status = payload['status'] as String?;
+    final amount = payload['amount'] as num?;
+    final termInMonths = payload['termInMonths'] as int?;
+    final interestRate = payload['interestRate'] as double?;
+    final note = payload['note'] as String?;
+
+    final currencyFormatter = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final percentFormatter = NumberFormat.percentPattern(locale: 'en_US');
+
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Row (Icon, Title, Timestamp, Trailing)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Theme.of(context).colorScheme.primary.withAlpha(50),
+                  ),
+                  child: Icon(
+                    AppIcon.dollar, // Assuming an icon for loans/finance
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                     Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: <Widget>[
+                          Expanded(
+                            child: TitleText("Loan Update",
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          customText(
+                            '· ${Utility.getChatTime(model.createdAt)}',
+                            style: TextStyles.userNameStyle.copyWith(fontSize: 12),
+                          ),
+                          Container(child: trailing ?? const SizedBox.shrink()),
+                        ],
+                      ),
+                    if (lenderName != null)
+                      Text(lenderName, style: TextStyles.subtitleStyle),
+                    // If model.user is the one who posted this update (e.g. an agent)
+                    if (model.user != null && model.user?.displayName != lenderName)
+                       customText(
+                        'Posted by: @${model.user!.userName}',
+                        style: TextStyles.userNameStyle.copyWith(fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Loan Details
+          if (status != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Row(
+                children: [
+                  Text("Status: ", style: TextStyles.titleStyle.copyWith(fontSize: 15)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(status).withAlpha(40),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _getStatusColor(status), width: 1)
+                    ),
+                    child: Text(
+                      status.toUpperCase(),
+                      style: TextStyles.subtitleStyle.copyWith(color: _getStatusColor(status), fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          if (amount != null)
+            _buildDetailRow(context, AppIcon.money, "Amount:", currencyFormatter.format(amount)),
+
+          if (interestRate != null)
+             _buildDetailRow(context, AppIcon.percent, "Interest Rate:", percentFormatter.format(interestRate / 100)), // Assuming rate is like 3.5 for 3.5%
+
+          if (termInMonths != null)
+            _buildDetailRow(context, AppIcon.calendar, "Term:", "$termInMonths months"),
+
+          if (note != null && note.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text("Note:", style: TextStyles.titleStyle.copyWith(fontSize: 15)),
+            const SizedBox(height: 4),
+            Text(note, style: TextStyles.textStyle14),
+          ],
+
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(BuildContext context, IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey[700]),
+          const SizedBox(width: 8),
+          Text(label, style: TextStyles.subtitleStyle.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(width: 6),
+          Expanded(child: Text(value, style: TextStyles.subtitleStyle, textAlign: TextAlign.end,)),
+        ],
+      ),
+    );
+  }
 }
 
 class _PropertyListingCard extends StatelessWidget {
@@ -647,108 +1379,31 @@ class _TweetBody extends StatelessWidget {
       return _AgentReplyCard(model: model, type: type, trailing: trailing, isDisplayOnProfile: isDisplayOnProfile);
     } else if (model.postType == PostTypes.PropertyListing) { // Handle PropertyListing
       return _PropertyListingCard(model: model, type: type, trailing: trailing, isDisplayOnProfile: isDisplayOnProfile);
+    } else if (model.postType == PostTypes.LoanUpdate) { // Handle LoanUpdate
+      return _LoanUpdateCard(model: model, type: type, trailing: trailing, isDisplayOnProfile: isDisplayOnProfile);
+    } else if (model.postType == PostTypes.TaskUpdate) { // Handle TaskUpdate
+      return _TaskUpdateCard(model: model, type: type, trailing: trailing, isDisplayOnProfile: isDisplayOnProfile);
+    } else if (model.postType == PostTypes.ServiceMatch) { // Handle ServiceMatch
+      return _ServiceMatchCard(model: model, type: type, trailing: trailing, isDisplayOnProfile: isDisplayOnProfile);
+    } else if (model.postType == PostTypes.ExternalAPI) { // Handle ExternalAPI
+      return _ExternalApiCard(model: model, type: type, trailing: trailing, isDisplayOnProfile: isDisplayOnProfile);
     }
 
-    // Original Tweet Body Logic (now default)
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        const SizedBox(width: 10),
-        SizedBox(
-          width: 40,
-          height: 40,
-          child: GestureDetector(
-            onTap: () {
-              // If tweet is displaying on someone's profile then no need to navigate to same user's profile again.
-              if (isDisplayOnProfile) {
-                return;
-              }
-              Navigator.push(
-                  context, ProfilePage.getRoute(profileId: model.userId));
-            },
-            child: CircularImage(path: model.user?.profilePic), // Added null check for model.user
-          ),
-        ),
-        const SizedBox(width: 20),
-        SizedBox(
-          width: context.width - 80,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                mainAxisSize: MainAxisSize.max,
-                children: <Widget>[
-                  Expanded(
-                    child: Row(
-                      children: <Widget>[
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                              minWidth: 0, maxWidth: context.width * .5),
-                          child: TitleText(model.user?.displayName ?? 'Unknown User', // Added null check
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              overflow: TextOverflow.ellipsis),
-                        ),
-                        const SizedBox(width: 3),
-                        model.user?.isVerified == true // Added null check
-                            ? customIcon(
-                                context,
-                                icon: AppIcon.blueTick,
-                                isTwitterIcon: true,
-                                iconColor: AppColor.primary,
-                                size: 13,
-                                paddingIcon: 3,
-                              )
-                            : const SizedBox(width: 0),
-                        SizedBox(
-                          width: model.user?.isVerified == true ? 5 : 0, // Added null check
-                        ),
-                        Flexible(
-                          child: customText(
-                            '${model.user?.userName ?? ''}', // Added null check
-                            style: TextStyles.userNameStyle,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        customText(
-                          '· ${Utility.getChatTime(model.createdAt)}',
-                          style:
-                              TextStyles.userNameStyle.copyWith(fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(child: trailing ?? const SizedBox()),
-                ],
-              ),
-              model.description == null
-                  ? const SizedBox()
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        UrlText(
-                          text: model.description!.removeSpaces,
-                          onHashTagPressed: (tag) {
-                            cprint(tag);
-                          },
-                          style: textStyle,
-                          urlStyle: urlStyle,
-                        ),
-                      ],
-                    ),
-              if (model.imagePath == null && model.description != null)
-                CustomLinkMediaInfo(text: model.description!),
-            ],
-          ),
-        ),
-        const SizedBox(width: 10),
-      ],
+    // _TweetBody is now simplified to use GeniiPostWidget
+    return GeniiPostWidget(
+      model: model,
+      type: type,
+      trailing: trailing,
+      isDisplayOnProfile: isDisplayOnProfile,
     );
   }
 }
 
+// All individual card widgets (_TrustDistributionEventCard, _AgentPromptCard, etc.)
+// have been moved to lib/widgets/post/genii_post_widget.dart
+// The definitions below are now removed from this file.
+
+/*
 class _TrustDistributionEventCard extends StatelessWidget {
   final FeedModel model;
   final TweetType type;

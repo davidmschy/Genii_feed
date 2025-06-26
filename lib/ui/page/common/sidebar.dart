@@ -11,6 +11,8 @@ import 'package:flutter_twitter_clone/ui/theme/theme.dart';
 import 'package:flutter_twitter_clone/widgets/customWidgets.dart';
 import 'package:flutter_twitter_clone/widgets/url_text/customUrlText.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_twitter_clone/helper/enum.dart'; // For UserRoles, AppIcon if needed for roles
+import 'package:flutter_twitter_clone/services/mock_seed_service.dart'; // Import for seeder
 
 class SidebarMenu extends StatefulWidget {
   const SidebarMenu({Key? key, this.scaffoldKey}) : super(key: key);
@@ -121,11 +123,11 @@ class _SidebarMenuState extends State<SidebarMenu> {
       onTap: () {
         var authState = context.read<AuthState>();
         late List<String> usersList;
-        authState.getProfileUser();
-        Navigator.pop(context);
+        // authState.getProfileUser(); // This might not be needed here if userModel is already up-to-date
+        Navigator.pop(context); // Close drawer before navigating
         switch (navigateTo) {
           case "FollowerListPage":
-            usersList = authState.userModel!.followersList!;
+            usersList = authState.userModel!.followersList ?? [];
             Navigator.push(
               context,
               FollowerListPage.getRoute(
@@ -135,7 +137,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
             );
             break;
           case "FollowingListPage":
-            usersList = authState.userModel!.followingList!;
+            usersList = authState.userModel!.followingList ?? [];
             Navigator.push(
               context,
               FollowingListPage.getRoute(
@@ -166,6 +168,10 @@ class _SidebarMenuState extends State<SidebarMenu> {
     return ListTile(
       onTap: () {
         if (onPressed != null) {
+          // Close drawer before executing onPressed, if it doesn't navigate itself
+          if (title != "Logout" && title != "Settings and privacy") { // Example: keep drawer open for settings or logout confirmation
+             // Navigator.pop(context);
+          }
           onPressed();
         }
       },
@@ -190,6 +196,71 @@ class _SidebarMenuState extends State<SidebarMenu> {
     );
   }
 
+  Widget _buildRoleSwitcher() {
+    final authState = context.watch<AuthState>();
+
+    if (authState.userModel == null || authState.userModel!.roles.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    String? currentDisplayRole = authState.userModel!.currentRole;
+    if (currentDisplayRole == null || !authState.userModel!.roles.contains(currentDisplayRole)) {
+      currentDisplayRole = authState.userModel!.roles.isNotEmpty ? authState.userModel!.roles.first : null;
+    }
+
+    if (currentDisplayRole == null && authState.userModel!.roles.isEmpty) {
+        return const SizedBox.shrink();
+    }
+    // If currentDisplayRole is still null but roles list is not empty, pick the first one.
+    // This ensures DropdownButton always has a valid value if items are available.
+    if (currentDisplayRole == null && authState.userModel!.roles.isNotEmpty) {
+        currentDisplayRole = authState.userModel!.roles.first;
+    }
+
+
+    return ListTile(
+      dense: true, // Makes the ListTile a bit more compact
+      leading: Padding(
+        padding: const EdgeInsets.only(top: 0, left: 5),
+        child: customIcon(
+          context,
+          icon: AppIcon.users,
+          size: 23,
+          iconColor: AppColor.darkGrey,
+        ),
+      ),
+      title: Container(
+        // No horizontal padding for DropdownButton itself, ListTile handles padding
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: currentDisplayRole,
+            isExpanded: true,
+            icon: Icon(AppIcon.arrowDown, color: AppColor.primary, size: 20),
+            onChanged: (String? newValue) {
+              if (newValue != null) {
+                context.read<AuthState>().updateUserCurrentRole(newValue);
+                 Navigator.pop(context); // Close drawer after role selection
+              }
+            },
+            items: authState.userModel!.roles
+                .map<DropdownMenuItem<String>>((String value) {
+              return DropdownMenuItem<String>(
+                value: value,
+                child: Text(
+                  value,
+                  style: const TextStyle(fontSize: 18, color: AppColor.secondary),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            hint: const Text("Select Role", style: TextStyle(fontSize: 18, color: AppColor.lightGrey)),
+          ),
+        ),
+      ),
+    );
+  }
+
+
   Positioned _footer() {
     return Positioned(
       bottom: 0,
@@ -212,10 +283,13 @@ class _SidebarMenuState extends State<SidebarMenu> {
               const Spacer(),
               TextButton(
                 onPressed: () {
-                  Navigator.push(
-                      context,
-                      ScanScreen.getRoute(
-                          context.read<AuthState>().profileUserModel!));
+                  Navigator.pop(context); // Close drawer
+                  if (context.read<AuthState>().userModel != null) {
+                     Navigator.push(
+                        context,
+                        ScanScreen.getRoute(
+                            context.read<AuthState>().userModel!)); // profileUserModel changed to userModel
+                  }
                 },
                 child: Image.asset(
                   "assets/images/qr.png",
@@ -262,6 +336,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                   _menuListRowButton('Profile',
                       icon: AppIcon.profile, isEnable: true, onPressed: () {
                     var state = context.read<AuthState>();
+                     Navigator.pop(context); // Close drawer
                     Navigator.push(
                         context, ProfilePage.getRoute(profileId: state.userId));
                   }),
@@ -270,17 +345,42 @@ class _SidebarMenuState extends State<SidebarMenu> {
                     icon: AppIcon.bookmark,
                     isEnable: true,
                     onPressed: () {
+                       Navigator.pop(context); // Close drawer
                       Navigator.push(context, BookmarkPage.getRoute());
                     },
                   ),
-                  _menuListRowButton('Lists', icon: AppIcon.lists),
-                  _menuListRowButton('Moments', icon: AppIcon.moments),
+                  _menuListRowButton('Lists', icon: AppIcon.lists), // onPressed: () { Navigator.pop(context); ...}
+                  _menuListRowButton('Moments', icon: AppIcon.moments), // onPressed: () { Navigator.pop(context); ...}
+                  const Divider(),
+                  _buildRoleSwitcher(),
+                  const Divider(),
+                  _menuListRowButton('Seed Mock Data', icon: AppIcon.seed, isEnable: true, onPressed: () { // Seed Data Button
+                    Navigator.pop(context); // Close drawer
+                    final authState = context.read<AuthState>();
+                    if (authState.userId.isNotEmpty) {
+                      MockSeedService().seedInitialData(currentAuthUserId: authState.userId).then((_) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Mock data seeding initiated.")),
+                        );
+                        // Optionally, refresh feed or other states if needed
+                        // Provider.of<FeedState>(context, listen: false).getDataFromDatabase();
+                      }).catchError((e) {
+                         ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("Error seeding data: $e")),
+                        );
+                      });
+                    } else {
+                       ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("User not logged in. Cannot seed data.")),
+                      );
+                    }
+                  }),
                   const Divider(),
                   _menuListRowButton('Settings and privacy', isEnable: true,
                       onPressed: () {
                     _navigateTo('SettingsAndPrivacyPage');
                   }),
-                  _menuListRowButton('Help Center'),
+                  _menuListRowButton('Help Center'), // onPressed: () { Navigator.pop(context); ...}
                   const Divider(),
                   _menuListRowButton('Logout',
                       icon: null, onPressed: _logOut, isEnable: true),

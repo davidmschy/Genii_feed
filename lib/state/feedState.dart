@@ -86,52 +86,93 @@ class FeedState extends AppState {
   /// Contain GeniiPost list for home page, applying current filters.
   /// Renamed from getTweetList to getPostList.
   List<FeedModel>? getPostList(UserModel? currentUser) {
-    // currentUser might be used for role-based filtering or "my posts"
-    // For now, the userModel param is not directly used in these conceptual filters,
-    // but it's kept for future use (e.g. if _roleFilter is derived from currentUser.activeRole)
-
     if (rawFeedList == null || rawFeedList!.isEmpty) {
       return null;
     }
 
-    List<FeedModel> filteredList = List.from(rawFeedList!);
+    List<FeedModel> postsToFilter = List.from(rawFeedList!);
+    List<FeedModel> filteredList = [];
 
-    // Conceptual filtering logic:
-    // These will be actual .where clauses when fully implemented.
-
-    // 1. Filter by Property ID
+    // Apply conceptual filters first (Property, Agent, specific PostType)
+    // These are still conceptual and will be implemented fully later.
+    // For now, they print to console. If they were active, they'd modify 'postsToFilter'.
     if (_propertyFilterId != null) {
-      // filteredList = filteredList.where((post) => post.propertyId == _propertyFilterId).toList();
-      cprint("Conceptual: Filtering by property ID: $_propertyFilterId");
+      postsToFilter = postsToFilter.where((post) => post.propertyId == _propertyFilterId).toList();
+      cprint("Filtering by property ID: $_propertyFilterId");
     }
-
-    // 2. Filter by Post Type
     if (_postTypeFilter != null) {
-      // filteredList = filteredList.where((post) => post.postType == _postTypeFilter).toList();
-      cprint("Conceptual: Filtering by post type: $_postTypeFilter");
+      postsToFilter = postsToFilter.where((post) => post.postType == _postTypeFilter).toList();
+      cprint("Filtering by post type: $_postTypeFilter");
     }
-
-    // 3. Filter by Agent ID
     if (_agentFilterId != null) {
-      // filteredList = filteredList.where((post) => post.agentId == _agentFilterId).toList();
-      cprint("Conceptual: Filtering by agent ID: $_agentFilterId");
+      postsToFilter = postsToFilter.where((post) => post.agentId == _agentFilterId).toList();
+      cprint("Filtering by agent ID: $_agentFilterId");
     }
 
-    // 4. Filter by Role (This is more complex and might involve checking post visibility against user's role)
-    //    For example, a contractor might only see TaskUpdate posts relevant to them.
-    //    An investor might see CashFlowEvent and LoanUpdate posts.
-    //    This will likely depend on the currentUser.activeRole and rules defined per postType.
-    if (_roleFilter != null) {
-      // This is a placeholder for more complex logic.
-      // For instance, if _roleFilter is "Contractor", we might only show "TaskUpdate" posts
-      // or posts where the currentUser.userId is involved based on their role.
-      // if (_roleFilter == "Contractor") {
-      //   filteredList = filteredList.where((post) => post.postType == PostTypes.TaskUpdate /* && isRelevantToContractor(post, currentUser) */).toList();
-      // }
-      cprint("Conceptual: Filtering by role: $_roleFilter (actual logic will be more involved)");
+    // Apply Role-Based Filtering
+    final String? activeRole = currentUser?.currentRole;
+
+    if (activeRole == null) {
+      // If no role is active, show all non-role-specific posts or a limited set.
+      // For now, let's assume it shows posts that are not explicitly role-restricted,
+      // or perhaps just 'Tweet' and 'PropertyListing' as a default.
+      // This behavior can be refined.
+      // filteredList = postsToFilter.where((post) {
+      //   return post.postType == PostTypes.Tweet || post.postType == PostTypes.PropertyListing;
+      // }).toList();
+      // For simplicity in this step, if no role, show all from `postsToFilter`
+      filteredList.addAll(postsToFilter);
+      cprint("No active role, showing all posts after conceptual filters.");
+    } else {
+      cprint("Filtering for role: $activeRole");
+      Map<String, List<String>> rolePermissions = {
+        UserRoles.Owner: [// All types are visible to Owner
+          PostTypes.PropertyListing, PostTypes.LoanUpdate, PostTypes.AgentPrompt,
+          PostTypes.AgentReply, PostTypes.TaskUpdate, PostTypes.CashFlowEvent,
+          PostTypes.ExternalAPI, PostTypes.ServiceMatch, PostTypes.TrustDistributionEvent, PostTypes.Tweet
+        ],
+        UserRoles.Agent: [
+          PostTypes.AgentPrompt, PostTypes.AgentReply, PostTypes.PropertyListing, PostTypes.TaskUpdate
+        ],
+        UserRoles.Investor: [
+          PostTypes.PropertyListing, PostTypes.TrustDistributionEvent, PostTypes.LoanUpdate, PostTypes.CashFlowEvent
+        ],
+        UserRoles.Contractor: [
+          PostTypes.TaskUpdate, PostTypes.ServiceMatch
+        ],
+        UserRoles.Lender: [
+          PostTypes.LoanUpdate, PostTypes.TrustDistributionEvent, PostTypes.CashFlowEvent
+        ],
+        // Tenant and Manufacturer roles can be added here if they have specific views
+         UserRoles.Tenant: [ // Example: Tenants might see property announcements or service updates
+            PostTypes.PropertyListing, // General property info they might be interested in
+            // Potentially a new PostType like "Announcement" or relevant "ServiceMatch"
+        ],
+        UserRoles.Manufacturer: [ // Example: Might see requests for proposals or specific supply chain tasks
+            // Potentially new PostTypes like "SupplyRequest" or relevant "TaskUpdate"
+        ],
+      };
+
+      List<String>? allowedTypes = rolePermissions[activeRole];
+
+      if (activeRole == UserRoles.Owner) { // Owner sees all
+        filteredList.addAll(postsToFilter);
+      } else if (allowedTypes != null) {
+        filteredList.addAll(postsToFilter.where((post) {
+          return allowedTypes.contains(post.postType);
+          // Additionally, more granular checks can be added here:
+          // e.g., for a Contractor, only show TaskUpdates where post.payload['contractorId'] == currentUser.userId
+          // e.g., for an Agent, only show AgentPrompts/Replies relevant to them (post.agentId == currentUser.userId)
+          // For now, it's a simple postType check.
+        }));
+      } else {
+        // Role not in map or has no specific permissions defined, show nothing or a default set.
+        // For now, show nothing if role has no explicit permissions (except Owner).
+         cprint("Role $activeRole has no specific post types defined, showing no posts.");
+      }
     }
 
-    // Original logic from getTweetList (related to comments and specific user posts)
+    // Original logic from getTweetList (related to comments and specific user posts) - RE-EVALUATE
     // This might need re-evaluation in the context of GeniiPosts.
     // For now, I'm commenting it out as the new filters take precedence for this step.
     /*
