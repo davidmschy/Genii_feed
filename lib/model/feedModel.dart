@@ -19,22 +19,33 @@ class FeedModel {
   String?
       lanCode; //Saving the language of the tweet so to not translate to check which language
   UserModel? user;
-  FeedModel(
-      {this.key,
-      this.description,
-      required this.userId,
-      this.likeCount,
-      this.commentCount,
-      this.retweetCount,
-      required this.createdAt,
-      this.imagePath,
-      this.likeList,
-      this.tags,
-      this.user,
-      this.replyTweetKeyList,
-      this.parentkey,
-      this.lanCode,
-      this.childRetwetkey});
+
+  // New fields for GeniiPost
+  String? postType; // e.g., "Tweet", "TrustDistributionEvent"
+  Map<String, dynamic>? eventPayload; // Stores specific data for custom post types
+  String? propertyId; // Optional: associated property ID for any post
+
+  FeedModel({
+    this.key,
+    this.description,
+    required this.userId,
+    this.likeCount,
+    this.commentCount,
+    this.retweetCount,
+    required this.createdAt,
+    this.imagePath,
+    this.likeList,
+    this.tags,
+    this.user,
+    this.replyTweetKeyList,
+    this.parentkey,
+    this.lanCode,
+    this.childRetwetkey,
+    this.postType = "Tweet", // Default to "Tweet" for existing posts
+    this.eventPayload,
+    this.propertyId,
+  });
+
   toJson() {
     return {
       "userId": userId,
@@ -50,7 +61,10 @@ class FeedModel {
       "user": user == null ? null : user!.toJson(),
       "parentkey": parentkey,
       "lanCode": lanCode,
-      "childRetwetkey": childRetwetkey
+      "childRetwetkey": childRetwetkey,
+      "postType": postType,
+      "eventPayload": eventPayload,
+      "propertyId": propertyId,
     };
   }
 
@@ -63,11 +77,24 @@ class FeedModel {
     retweetCount = map["retweetCount"] ?? 0;
     imagePath = map['imagePath'];
     createdAt = map['createdAt'];
-    imagePath = map['imagePath'];
+    // imagePath = map['imagePath']; // Duplicate assignment, removing one
     lanCode = map['lanCode'];
-    user = UserModel.fromJson(map['user']);
+
+    // Handle potential null user map, common if user data is denormalized or missing
+    if (map['user'] != null) {
+      user = UserModel.fromJson(map['user']);
+    } else {
+      // Create a default or placeholder user if necessary, or handle null user in UI
+      // For now, allowing user to be null as it's nullable in the class.
+    }
+
     parentkey = map['parentkey'];
     childRetwetkey = map['childRetwetkey'];
+
+    postType = map['postType'] ?? "Tweet"; // Default to "Tweet" if not present
+    eventPayload = map['eventPayload'] != null ? Map<String, dynamic>.from(map['eventPayload']) : null;
+    propertyId = map['propertyId'];
+
     if (map['tags'] != null) {
       tags = <String>[];
       map['tags'].forEach((value) {

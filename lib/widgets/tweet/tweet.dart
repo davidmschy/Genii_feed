@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_twitter_clone/helper/enum.dart';
 import 'package:flutter_twitter_clone/helper/utility.dart';
 import 'package:flutter_twitter_clone/model/feedModel.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_twitter_clone/ui/page/profile/profilePage.dart';
 import 'package:flutter_twitter_clone/ui/page/profile/widgets/circular_image.dart';
 import 'package:flutter_twitter_clone/ui/theme/theme.dart';
 import 'package:flutter_twitter_clone/widgets/newWidget/title_text.dart';
+import 'package:intl/intl.dart'; // For currency formatting
 import 'package:flutter_twitter_clone/widgets/tweet/widgets/parentTweet.dart';
 import 'package:flutter_twitter_clone/widgets/tweet/widgets/tweetIconsRow.dart';
 import 'package:flutter_twitter_clone/widgets/url_text/customUrlText.dart';
@@ -175,6 +177,13 @@ class _TweetBody extends StatelessWidget {
         color: Colors.blue,
         fontSize: descriptionFontSize,
         fontWeight: descriptionFontWeight);
+
+    // Handle TrustDistributionEvent separately
+    if (model.postType == "TrustDistributionEvent") {
+      return _TrustDistributionEventCard(model: model, type: type, trailing: trailing, isDisplayOnProfile: isDisplayOnProfile,);
+    }
+
+    // Original Tweet Body Logic
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -191,7 +200,7 @@ class _TweetBody extends StatelessWidget {
               Navigator.push(
                   context, ProfilePage.getRoute(profileId: model.userId));
             },
-            child: CircularImage(path: model.user!.profilePic),
+            child: CircularImage(path: model.user?.profilePic), // Added null check for model.user
           ),
         ),
         const SizedBox(width: 20),
@@ -210,13 +219,13 @@ class _TweetBody extends StatelessWidget {
                         ConstrainedBox(
                           constraints: BoxConstraints(
                               minWidth: 0, maxWidth: context.width * .5),
-                          child: TitleText(model.user!.displayName!,
+                          child: TitleText(model.user?.displayName ?? 'Unknown User', // Added null check
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
                               overflow: TextOverflow.ellipsis),
                         ),
                         const SizedBox(width: 3),
-                        model.user!.isVerified!
+                        model.user?.isVerified == true // Added null check
                             ? customIcon(
                                 context,
                                 icon: AppIcon.blueTick,
@@ -227,11 +236,11 @@ class _TweetBody extends StatelessWidget {
                               )
                             : const SizedBox(width: 0),
                         SizedBox(
-                          width: model.user!.isVerified! ? 5 : 0,
+                          width: model.user?.isVerified == true ? 5 : 0, // Added null check
                         ),
                         Flexible(
                           child: customText(
-                            '${model.user!.userName}',
+                            '${model.user?.userName ?? ''}', // Added null check
                             style: TextStyles.userNameStyle,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -273,6 +282,134 @@ class _TweetBody extends StatelessWidget {
     );
   }
 }
+
+class _TrustDistributionEventCard extends StatelessWidget {
+  final FeedModel model;
+  final TweetType type;
+  final Widget? trailing;
+  final bool isDisplayOnProfile;
+
+  const _TrustDistributionEventCard({
+    Key? key,
+    required this.model,
+    required this.type,
+    this.trailing,
+    required this.isDisplayOnProfile,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final payload = model.eventPayload;
+    if (payload == null) {
+      return const SizedBox.shrink(); // Or some error widget
+    }
+
+    final totalAmount = payload['totalAmount'] as double?;
+    final sourceEvent = payload['sourceEvent'] as String?;
+    final distributions = (payload['distributions'] as List<dynamic>?)
+        ?.map((d) => d as Map<String, dynamic>)
+        .toList();
+
+    final currencyFormatter = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: GestureDetector(
+              onTap: () {
+                if (isDisplayOnProfile) return;
+                Navigator.push(context, ProfilePage.getRoute(profileId: model.userId));
+              },
+              // Using a generic icon for TrustDistributionEvent
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Theme.of(context).colorScheme.secondary.withAlpha(50),
+                ),
+                child: Icon(
+                  AppIcon.transferIcon, // Placeholder, replace with a more suitable icon
+                  color: Theme.of(context).colorScheme.secondary,
+                  size: 20,
+                ),
+              )
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: <Widget>[
+                     Expanded(
+                      child: Row(
+                        children: <Widget>[
+                          TitleText("Trust Distribution", // Static title for this event type
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                           ),
+                           const SizedBox(width: 3),
+                           // No blue tick or username for this event type by default
+                           const Spacer(), // Pushes time to the right
+                           customText(
+                            '· ${Utility.getChatTime(model.createdAt)}',
+                            style: TextStyles.userNameStyle.copyWith(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(child: trailing ?? const SizedBox()),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (model.description != null && model.description!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: Text(model.description!, style: TextStyles.textStyle14),
+                  ),
+
+                Text(
+                  "Source: ${sourceEvent ?? 'N/A'}",
+                  style: TextStyles.subtitleStyle.copyWith(fontWeight: FontWeight.bold),
+                ),
+                if (totalAmount != null)
+                  Text(
+                    "Total Amount: ${currencyFormatter.format(totalAmount)}",
+                    style: TextStyles.subtitleStyle.copyWith(fontWeight: FontWeight.bold, color: TwitterColor.bondyBlue),
+                  ),
+                const SizedBox(height: 8),
+                if (distributions != null && distributions.isNotEmpty) ...[
+                  const TitleText("Distributions:", fontSize: 14, fontWeight: FontWeight.w600),
+                  const SizedBox(height: 4),
+                  ...distributions.map((dist) {
+                    final userId = dist['userId'] as String?;
+                    final role = dist['role'] as String?;
+                    final amount = dist['amount'] as double?;
+                    return Padding(
+                      padding: const EdgeInsets.only(left: 8.0, top: 2, bottom: 2),
+                      child: Text(
+                        "${role ?? 'Unknown Role'} (${userId ?? 'N/A User'}): ${amount != null ? currencyFormatter.format(amount) : 'N/A'}",
+                        style: TextStyles.textStyle14,
+                      ),
+                    );
+                  }).toList(),
+                ],
+                SizedBox(height: model.childRetwetkey == null ? 8 : 0), // Add some padding if no retweet widget follows
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 
 class _TweetDetailBody extends StatelessWidget {
   final FeedModel model;

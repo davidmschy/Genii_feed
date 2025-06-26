@@ -14,6 +14,7 @@ import 'package:flutter_twitter_clone/state/suggestionUserState.dart';
 import 'package:flutter_twitter_clone/state/feedState.dart';
 import 'package:flutter_twitter_clone/state/notificationState.dart';
 import 'package:flutter_twitter_clone/state/searchState.dart';
+import 'package:flutter_twitter_clone/services/trust_payment_engine.dart'; // Import the engine
 import 'package:flutter_twitter_clone/ui/page/feed/feedPage.dart';
 import 'package:flutter_twitter_clone/ui/page/feed/feedPostDetail.dart';
 import 'package:flutter_twitter_clone/ui/page/feed/suggestedUsers.dart';
@@ -23,6 +24,7 @@ import 'package:flutter_twitter_clone/widgets/bottomMenuBar/bottomMenuBar.dart';
 import 'package:provider/provider.dart';
 
 import 'common/locator.dart';
+import 'package:flutter_twitter_clone/ui/theme/theme.dart'; // For AppIcon
 import 'common/sidebar.dart';
 import 'notification/notificationPage.dart';
 import 'search/SearchPage.dart';
@@ -217,6 +219,46 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       key: _scaffoldKey,
+      appBar: AppBar(
+        title: Text(
+          Provider.of<AppState>(context).pageIndex == 0 ? "Feed" :
+          Provider.of<AppState>(context).pageIndex == 1 ? "Search" :
+          Provider.of<AppState>(context).pageIndex == 2 ? "Notifications" :
+          "Messages",
+          style: TextStyles.titleStyle.copyWith(color: Theme.of(context).colorScheme.onPrimary),
+        ),
+        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onPrimary),
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor ?? Theme.of(context).primaryColor,
+        actions: [
+          // Add a temporary button to trigger the payment simulation
+          if (Provider.of<AppState>(context).pageIndex == 0) // Only show on Feed page
+            IconButton(
+              icon: Icon(AppIcon.coin, color: Theme.of(context).colorScheme.onPrimary),
+              tooltip: 'Simulate Rent Payment',
+              onPressed: () async {
+                try {
+                  final engine = TrustPaymentEngine();
+                  await engine.processCashInflow(
+                    trustAccountId: "trustAcc123_property123", // From mock data
+                    amount: 2500.00,
+                    triggerEvent: "RentReceived",
+                    eventDescription: "Simulated monthly rent for Apt 5B",
+                  );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Rent payment simulated and TrustDistributionEvent posted.')),
+                  );
+                  // Optional: Refresh feed data if not automatically handled by listeners
+                  // Provider.of<FeedState>(context, listen: false).getDataFromDatabase();
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error simulating payment: $e')),
+                  );
+                  cprint("Error simulating payment: $e", errorIn: "HomePageSimulateButton");
+                }
+              },
+            ),
+        ],
+      ),
       bottomNavigationBar: const BottomMenubar(),
       drawer: const SidebarMenu(),
       body: _body(),

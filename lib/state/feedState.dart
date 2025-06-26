@@ -134,7 +134,8 @@ class FeedState extends AppState {
   Future<bool> databaseInit() {
     try {
       if (_feedQuery == null) {
-        _feedQuery = kDatabase.child("tweet");
+        // Reading from "geniiPosts" instead of "tweet"
+        _feedQuery = kDatabase.child("geniiPosts");
         _feedQuery!.onChildAdded.listen(_onTweetAdded);
         _feedQuery!.onChildChanged.listen(_onTweetChanged);
         _feedQuery!.onChildRemoved.listen(_onTweetRemoved);
@@ -147,13 +148,14 @@ class FeedState extends AppState {
     }
   }
 
-  /// get [Tweet list] from firebase realtime database
+  /// get [Post list] from firebase realtime database (formerly Tweet list)
   void getDataFromDatabase() {
     try {
       isBusy = true;
       _feedList = null;
       notifyListeners();
-      kDatabase.child('tweet').once().then((DatabaseEvent event) {
+      // Reading from "geniiPosts" instead of "tweet"
+      kDatabase.child('geniiPosts').once().then((DatabaseEvent event) {
         final snapshot = event.snapshot;
         _feedList = <FeedModel>[];
         if (snapshot.value != null) {
@@ -162,13 +164,30 @@ class FeedState extends AppState {
             map.forEach((key, value) {
               var model = FeedModel.fromJson(value);
               model.key = key;
+              // Assuming isValidTweet is still relevant or will be adapted
+              // For TrustDistributionEvent, user might be null or a system user.
+              // The isValidTweet check might need adjustment if it heavily relies on user details not present in these events.
+              // For now, we keep it to see if it causes issues.
+              // A TrustDistributionEvent might not have a user in the same way a tweet does.
+              // Let's refine `isValidTweet` or ensure `user` is populated for these events.
+              // The TrustPaymentEngine currently assigns a mock user.
               if (model.isValidTweet) {
                 _feedList!.add(model);
+              } else {
+                // If isValidTweet is false, we might still want to add it if it's a valid GeniiPost type
+                if (model.postType == "TrustDistributionEvent" && model.eventPayload != null) {
+                  // Potentially add custom validation for TrustDistributionEvent here
+                  // For now, let's add it if it's the correct type, assuming payload makes it valid.
+                  cprint("Adding TrustDistributionEvent that failed isValidTweet check, but seems valid: ${model.key}");
+                  _feedList!.add(model);
+                } else {
+                  cprint("Skipping invalid model: ${model.key}, type: ${model.postType}");
+                }
               }
             });
 
-            /// Sort Tweet by time
-            /// It helps to display newest Tweet first.
+            /// Sort Post by time
+            /// It helps to display newest Post first.
             _feedList!.sort((x, y) => DateTime.parse(x.createdAt)
                 .compareTo(DateTime.parse(y.createdAt)));
           }
@@ -184,7 +203,7 @@ class FeedState extends AppState {
     }
   }
 
-  /// get [Tweet Detail] from firebase realtime kDatabase
+  /// get [Post Detail] from firebase realtime kDatabase (formerly Tweet Detail)
   /// If model is null then fetch tweet from firebase
   /// [getPostDetailFromDatabase] is used to set prepare Tweet to display Tweet detail
   /// After getting tweet detail fetch tweet comments from firebase
