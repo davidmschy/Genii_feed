@@ -170,7 +170,9 @@ class MockSeedService {
         },
       ));
 
-      // PropertyListing (mock Zillow)
+      // PropertyListing posts are now handled by ListingIngestService with live data
+      // So, we remove the mock PropertyListing generation from here.
+      /*
       postsToSeed.add(FeedModel(
         key: _database.child("geniiPosts").push().key,
         userId: ownerUser.userId!, user: ownerUser, createdAt: now, // System or agent might post this
@@ -180,13 +182,15 @@ class MockSeedService {
           'address': "789 Pine St, Anytown, USA", 'price': 620000, 'bedrooms': 4, 'bathrooms': 3, 'sqft': 2200,
           'imageUrl': "https://picsum.photos/seed/prop1/600/400", 'source': "Zillow",
           'listingUrl': "https://www.zillow.com/some-listing-id"
+          // Ensure 'zip' is added here if this mock were to be used with geo-filtering
         },
       ));
+      */
 
       for (var post in postsToSeed) {
         await _database.child("geniiPosts").child(post.key!).set(post.toJson());
       }
-      print("${postsToSeed.length} initial posts seeded.");
+      print("${postsToSeed.length} initial non-PropertyListing posts seeded by MockSeedService.");
 
       // Trigger AgentReply for the AgentPrompt
       await MockAgentEngine().processAgentPrompt(agentPromptPost);
