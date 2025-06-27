@@ -5,6 +5,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_twitter_clone/helper/enum.dart';
 import 'package:flutter_twitter_clone/model/feedModel.dart';
 import 'package:flutter_twitter_clone/model/user.dart'; // For creating a mock agent UserModel
+import 'package:flutter_twitter_clone/config/firebase_config.dart'; // Import firebase_config
 
 // Helper to create a mock UserModel for an Agent
 UserModel _getMockAgentUser(String agentId, String agentName, String agentType) {
@@ -58,7 +59,7 @@ class MockAgentEngine {
     ];
     final replyText = replyTextOptions[_random.nextInt(replyTextOptions.length)];
 
-    final String newPostKey = _database.child("geniiPosts").push().key ?? "reply_key_${DateTime.now().millisecondsSinceEpoch}";
+    final String newPostKey = _database.child(postsCollectionPath).push().key ?? "reply_key_${DateTime.now().millisecondsSinceEpoch}"; // Use dynamic path
 
     final replyPost = FeedModel(
       key: newPostKey,
@@ -75,13 +76,13 @@ class MockAgentEngine {
         'originalPromptKey': promptPost.key,
         // Potentially add more structured data here later
       },
-      status: "Complete", // Or "InProgress" if it's just an acknowledgement
+      status: PostStatus.Resolved, // Use PostStatus constant (Resolved or Complete)
       priority: promptPost.priority, // Inherit priority or set based on reply
     );
 
     try {
-      await _database.child("geniiPosts").child(newPostKey).set(replyPost.toJson());
-      print("MockAgentEngine: AgentReply ${newPostKey} posted to Firebase for prompt ${promptPost.key}");
+      await _database.child(postsCollectionPath).child(newPostKey).set(replyPost.toJson()); // Use dynamic path
+      print("MockAgentEngine: AgentReply ${newPostKey} posted to Firebase ($postsCollectionPath) for prompt ${promptPost.key}");
     } catch (e) {
       print("MockAgentEngine: Error posting AgentReply: $e");
     }

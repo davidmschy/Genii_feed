@@ -14,10 +14,13 @@ import 'state/authState.dart';
 import 'state/chats/chatState.dart';
 import 'state/feedState.dart';
 import 'state/notificationState.dart';
+import 'firebase_options.dart'; // Import generated Firebase options
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform, // Explicitly use options
+  );
   setupDependencies();
   runApp(const MyApp());
 }

@@ -6,7 +6,9 @@ import 'package:flutter_twitter_clone/services/mock_seed_service.dart'; // For f
 import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert'; // For jsonDecode
+import 'package:flutter_twitter_clone/env/env.dart'; // Import Env class
 import 'dart:math'; // For min function if needed
+import 'package:flutter_twitter_clone/config/firebase_config.dart'; // Import firebase_config
 
 /// ListingIngestService is responsible for fetching property listing data from multiple external sources,
 /// normalizing this data into a common FeedModel format (specifically PostTypes.PropertyListing),
@@ -35,8 +37,9 @@ class ListingIngestService {
   final DatabaseReference _database = FirebaseDatabase.instance.ref();
   final Uuid _uuid = Uuid();
   final Random _random = Random();
-  static const String _scraperApiKey = "5afe6d43e089c4e5a0957a8132b3ed26";
-  static const String _repliersApiKey = "OitUQAztFJR69gB4eTShLSLzGt1ANY";
+  // API Keys are now managed in lib/env/env.dart
+  // static const String _scraperApiKey = "5afe6d43e089c4e5a0957a8132b3ed26"; // Moved to Env.scraperApiKey
+  // static const String _repliersApiKey = "OitUQAztFJR69gB4eTShLSLzGt1ANY"; // Moved to Env.repliersApiKey
   static const String _repliersApiBase = "https://api.repliers.io/listings";
   static const String _geniiBotId = "genii_bot";
 
@@ -62,7 +65,7 @@ class ListingIngestService {
     try {
       final response = await http.get(
         url,
-        headers: {'Repliers-Api-Key': _repliersApiKey},
+        headers: {'Repliers-Api-Key': Env.repliersApiKey}, // Using Env.repliersApiKey
       ).timeout(const Duration(seconds: 20)); // Added timeout
 
       if (response.statusCode == 200) {
@@ -88,18 +91,15 @@ class ListingIngestService {
     }
   }
 
+  // Removed apiKey parameter, will use Env.scraperApiKey directly
   Future<List<Map<String, dynamic>>> _fetchAndParseSource(
-      String sourceName, String targetSearchUrl, String apiKey, String userZip) async {
+      String sourceName, String targetSearchUrl, String userZip) async {
 
-    // Prioritize structured endpoints if a mapping is known
     String scraperApiUrl;
-    if (sourceName == "Redfin" && false) { // Disabled for now, assuming generic for Redfin too
-        // Example: scraperApiUrl = "https://api.scraperapi.com/structured/redfin/listing-search?api_key=$apiKey&location=$userZip";
-        // This would require ScraperAPI to support location param for this structured endpoint.
-        // For now, using generic for both.
-        scraperApiUrl = "http://api.scraperapi.com/?api_key=$apiKey&url=${Uri.encodeComponent(targetSearchUrl)}&render=true&country_code=us&autoparse=true";
-    } else { // Generic approach for Zillow and potentially Redfin/CREXi
-        scraperApiUrl = "http://api.scraperapi.com/?api_key=$apiKey&url=${Uri.encodeComponent(targetSearchUrl)}&render=true&country_code=us&autoparse=true";
+    if (sourceName == "Redfin" && false) {
+        scraperApiUrl = "http://api.scraperapi.com/?api_key=${Env.scraperApiKey}&url=${Uri.encodeComponent(targetSearchUrl)}&render=true&country_code=us&autoparse=true";
+    } else {
+        scraperApiUrl = "http://api.scraperapi.com/?api_key=${Env.scraperApiKey}&url=${Uri.encodeComponent(targetSearchUrl)}&render=true&country_code=us&autoparse=true";
     }
 
     cprint("Querying ScraperAPI for $sourceName: $scraperApiUrl", infoIn: "_fetchAndParseSource");
@@ -177,7 +177,8 @@ class ListingIngestService {
       String sourceName = sourceEntry.key;
       String targetSearchUrl = sourceEntry.value(zipCode);
       try {
-        List<Map<String, dynamic>> scrapedData = await _fetchAndParseSource(sourceName, targetSearchUrl, _scraperApiKey, zipCode);
+        // Call updated _fetchAndParseSource without apiKey argument
+        List<Map<String, dynamic>> scrapedData = await _fetchAndParseSource(sourceName, targetSearchUrl, zipCode);
         for (var item in scrapedData) {
           item['_sourceName'] = sourceName; // Tag item with its source
           allRawListings.add(item);
@@ -294,7 +295,7 @@ class ListingIngestService {
 
 
         FeedModel listingPost = FeedModel(
-          key: _database.child("geniiPosts").push().key,
+            key: _database.child(postsCollectionPath).push().key, // Use dynamic path
           userId: _geniiBotId,
           user: _geniiBotUserModel,
           createdAt: DateTime.now().toUtc().toIso8601String(),
@@ -334,7 +335,7 @@ class ListingIngestService {
       cprint("Attempting to save ${finalPostsToSave.length} live fetched listings to Firebase...", infoIn: "fetchAndPostListingsForUser");
       for (var post in finalPostsToSave) {
         try {
-          await _database.child("geniiPosts").child(post.key!).set(post.toJson());
+          await _database.child(postsCollectionPath).child(post.key!).set(post.toJson()); // Use dynamic path
         } catch (e) {
           cprint("Error saving post ${post.key} to Firebase: $e", errorIn: "fetchAndPostListingsForUser");
         }

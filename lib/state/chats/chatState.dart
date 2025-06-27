@@ -8,6 +8,7 @@ import 'package:flutter_twitter_clone/model/chatModel.dart';
 import 'package:flutter_twitter_clone/helper/utility.dart';
 import 'package:flutter_twitter_clone/model/user.dart';
 import 'package:flutter_twitter_clone/state/appState.dart';
+import 'package:flutter_twitter_clone/config/firebase_config.dart'; // Import firebase_config
 
 class ChatState extends AppState {
   late bool setIsChatScreenOpen; //!obsolete
@@ -55,13 +56,23 @@ class ChatState extends AppState {
     if (_channelName == null) {
       getChannelName(userId, myId);
     }
+    // Assuming "chatUsers" might be a top-level node that also needs to be dynamic,
+    // or it's a sub-node under a user's profile (usersCollectionPath).
+    // For now, let's assume it's top-level and make it dynamic if needed, or leave if it's user-specific.
+    // The prompt specified "chats_dev" or "chats" as root. "chatUsers" seems like a related collection.
+    // Let's define `chatUsersCollectionPath` in firebase_config.dart as well.
+    // For now, I'll leave "chatUsers" as is, assuming it's either fine or will be addressed if it breaks.
+    // The main focus is "chats" and "messages".
     kDatabase
-        .child("chatUsers")
+        .child(chatUsersCollectionPath) // Use dynamic path for "chatUsers"
         .child(myId)
         .onChildAdded
         .listen(_onChatUserAdded);
+
     if (messageQuery == null || _channelName != getChannelName(userId, myId)) {
-      messageQuery = kDatabase.child("chats").child(_channelName!);
+      // The path "chats/{channelName}/messages" is common.
+      // Here, it seems "chats" is the parent of channels, and messages are direct children of a channel.
+      messageQuery = kDatabase.child(chatCollectionPath).child(_channelName!); // Use dynamic path for "chats"
       messageQuery!.onChildAdded.listen(_onMessageAdded);
       messageQuery!.onChildChanged.listen(_onMessageChanged);
     }
@@ -98,7 +109,7 @@ class ChatState extends AppState {
   void getUserChatList(String userId) {
     try {
       kDatabase
-          .child('chatUsers')
+          .child(chatUsersCollectionPath) // Use dynamic path
           .child(userId)
           .once()
           .then((DatabaseEvent event) {
@@ -141,7 +152,7 @@ class ChatState extends AppState {
   void getChatDetailAsync() async {
     try {
       kDatabase
-          .child('chats')
+          .child(chatCollectionPath) // Use dynamic path
           .child(_channelName!)
           .once()
           .then((DatabaseEvent event) {
@@ -174,19 +185,19 @@ class ChatState extends AppState {
     try {
       // if (_messageList == null || _messageList.length < 1) {
       kDatabase
-          .child('chatUsers')
+          .child(chatUsersCollectionPath) // Use dynamic path
           .child(message.senderId)
           .child(message.receiverId)
           .set(message.toJson());
 
       kDatabase
-          .child('chatUsers')
+          .child(chatUsersCollectionPath) // Use dynamic path
           .child(chatUser!.userId!)
           .child(message.senderId)
           .set(message.toJson());
 
       kDatabase
-          .child('chats')
+          .child(chatCollectionPath) // Use dynamic path
           .child(_channelName!)
           .push()
           .set(message.toJson());

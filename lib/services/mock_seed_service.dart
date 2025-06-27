@@ -7,6 +7,7 @@ import 'package:flutter_twitter_clone/model/feedModel.dart';
 import 'package:flutter_twitter_clone/services/trust_payment_engine.dart';
 import 'package:flutter_twitter_clone/services/mock_agent_engine.dart';
 import 'package:uuid/uuid.dart'; // For generating unique IDs
+import 'package:flutter_twitter_clone/config/firebase_config.dart'; // Import firebase_config
 
 class MockSeedService {
   final DatabaseReference _database = FirebaseDatabase.instance.ref();
@@ -63,29 +64,29 @@ class MockSeedService {
       ownerUser.key = currentAuthUserId;
 
 
-      await _database.child('profile').child(ownerUser.userId!).set(ownerUser.toJson());
-      await _database.child('profile').child(contractorUser.userId!).set(contractorUser.toJson());
-      await _database.child('profile').child(agentUser.userId!).set(agentUser.toJson());
-      print("Users seeded.");
+      await _database.child(usersCollectionPath).child(ownerUser.userId!).set(ownerUser.toJson());
+      await _database.child(usersCollectionPath).child(contractorUser.userId!).set(contractorUser.toJson());
+      await _database.child(usersCollectionPath).child(agentUser.userId!).set(agentUser.toJson());
+      print("Users seeded to $usersCollectionPath.");
 
       // --- 2. Create Properties ---
       Property property1 = Property(
         id: "prop_${_uuid.v4()}",
         address: "123 Main St, Anytown, USA",
         ownerId: ownerUser.userId!,
-        agentIds: [], // AI Agents will be linked later
+        agentIds: [],
         moduleIds: ["Feed", "Tasks", "Payments"],
       );
       Property property2 = Property(
         id: "prop_${_uuid.v4()}",
         address: "456 Oak Ave, Otherville, USA",
-        ownerId: ownerUser.userId!, // Alice owns both for simplicity
+        ownerId: ownerUser.userId!,
         agentIds: [],
         moduleIds: ["Feed", "Payments"],
       );
-      await _database.child('properties').child(property1.id).set(property1.toJson());
-      await _database.child('properties').child(property2.id).set(property2.toJson());
-      print("Properties seeded.");
+      await _database.child(propertiesCollectionPath).child(property1.id).set(property1.toJson());
+      await _database.child(propertiesCollectionPath).child(property2.id).set(property2.toJson());
+      print("Properties seeded to $propertiesCollectionPath.");
 
       // --- 3. Create AI Agents ---
       Agent aiAgent1 = Agent(
@@ -93,7 +94,7 @@ class MockSeedService {
         name: "DealHunter AI for ${property1.address.substring(0,12)}",
         type: AgentTypes.DealHunter,
         linkedPropertyId: property1.id,
-        createdBy: ownerUser.userId!, // System or Owner
+        createdBy: ownerUser.userId!,
         status: "Active",
       );
       Agent aiAgent2 = Agent(
@@ -104,39 +105,37 @@ class MockSeedService {
         createdBy: ownerUser.userId!,
         status: "Active",
       );
-      await _database.child('agents').child(aiAgent1.id).set(aiAgent1.toJson());
-      await _database.child('agents').child(aiAgent2.id).set(aiAgent2.toJson());
-      // Update properties with their AI agents
+      await _database.child(agentsCollectionPath).child(aiAgent1.id).set(aiAgent1.toJson());
+      await _database.child(agentsCollectionPath).child(aiAgent2.id).set(aiAgent2.toJson());
+
       property1 = property1.copyWith(agentIds: [aiAgent1.id]);
       property2 = property2.copyWith(agentIds: [aiAgent2.id]);
-      await _database.child('properties').child(property1.id).set(property1.toJson());
-      await _database.child('properties').child(property2.id).set(property2.toJson());
-      print("AI Agents seeded and linked to properties.");
+      await _database.child(propertiesCollectionPath).child(property1.id).set(property1.toJson());
+      await _database.child(propertiesCollectionPath).child(property2.id).set(property2.toJson());
+      print("AI Agents seeded to $agentsCollectionPath and linked to properties.");
 
 
       // --- 4. Create Posts ---
       List<FeedModel> postsToSeed = [];
       final String now = DateTime.now().toUtc().toIso8601String();
 
-      // AgentPrompt
       FeedModel agentPromptPost = FeedModel(
-        key: _database.child("geniiPosts").push().key,
-        userId: agentUser.userId!, // Human Agent Carol is prompting an AI agent
+        key: _database.child(postsCollectionPath).push().key, // Use dynamic path
+        userId: agentUser.userId!,
         user: agentUser,
         createdAt: now,
         postType: PostTypes.AgentPrompt,
-        agentId: aiAgent1.id, // Prompting AI Agent 1
+        agentId: aiAgent1.id,
         propertyId: property1.id,
         description: "Find comparable properties for 123 Main St focusing on recent sales in the last 3 months.",
         eventPayload: {'promptText': "Find comparable properties for 123 Main St focusing on recent sales in the last 3 months."},
-        status: "Open",
+        status: PostStatus.Open, // Use PostStatus constant
         priority: 2,
       );
       postsToSeed.add(agentPromptPost);
 
-      // LoanUpdate
       postsToSeed.add(FeedModel(
-        key: _database.child("geniiPosts").push().key,
+        key: _database.child(postsCollectionPath).push().key, // Use dynamic path
         userId: ownerUser.userId!, user: ownerUser, createdAt: now,
         postType: PostTypes.LoanUpdate, propertyId: property1.id,
         description: "Mortgage application status update for 123 Main St.",
@@ -146,22 +145,20 @@ class MockSeedService {
         },
       ));
 
-      // TaskUpdate
       postsToSeed.add(FeedModel(
-        key: _database.child("geniiPosts").push().key,
+        key: _database.child(postsCollectionPath).push().key, // Use dynamic path
         userId: contractorUser.userId!, user: contractorUser, createdAt: now,
         postType: PostTypes.TaskUpdate, propertyId: property2.id,
         description: "Kitchen remodel progress at 456 Oak Ave.",
         eventPayload: {
-          'taskName': "Kitchen Remodel - Phase 1", 'status': "In Progress",
+          'taskName': "Kitchen Remodel - Phase 1", 'status': PostStatus.InProgress, // Use PostStatus constant
           'contractorName': contractorUser.displayName, 'percentComplete': 0.45
         },
       ));
 
-      // ServiceMatch
       postsToSeed.add(FeedModel(
-        key: _database.child("geniiPosts").push().key,
-        userId: agentUser.userId!, user: agentUser, createdAt: now, // Agent found a service
+        key: _database.child(postsCollectionPath).push().key, // Use dynamic path
+        userId: agentUser.userId!, user: agentUser, createdAt: now,
         postType: PostTypes.ServiceMatch, propertyId: property1.id,
         description: "Found a plumber for the leak at 123 Main St.",
         eventPayload: {
@@ -170,17 +167,13 @@ class MockSeedService {
         },
       ));
 
-      // PropertyListing posts are now handled by ListingIngestService with live data.
-      // The logic for creating mock property listings will be moved to a separate method for fallback.
-
       for (var post in postsToSeed) {
-        await _database.child("geniiPosts").child(post.key!).set(post.toJson());
+        await _database.child(postsCollectionPath).child(post.key!).set(post.toJson()); // Use dynamic path
       }
-      print("${postsToSeed.length} initial non-PropertyListing posts seeded by MockSeedService.");
+      print("${postsToSeed.length} initial non-PropertyListing posts seeded by MockSeedService to $postsCollectionPath.");
 
-      // Trigger AgentReply for the AgentPrompt
-      if (postsToSeed.any((p) => p.postType == PostTypes.AgentPrompt)) { // Check if an agent prompt was actually seeded
-          await MockAgentEngine().processAgentPrompt(agentPromptPost);
+      if (postsToSeed.any((p) => p.postType == PostTypes.AgentPrompt)) {
+          await MockAgentEngine().processAgentPrompt(agentPromptPost); // Assumes agentPromptPost is defined
       }
       print("AgentReply triggered for seeded AgentPrompt.");
 

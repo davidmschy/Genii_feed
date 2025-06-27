@@ -2,6 +2,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_twitter_clone/model/feedModel.dart';
 import 'package:flutter_twitter_clone/model/trust_models.dart';
 import 'package:flutter_twitter_clone/model/user.dart'; // Assuming UserModel is needed for the 'user' field in FeedModel
+import 'package:flutter_twitter_clone/config/firebase_config.dart'; // Import firebase_config
 
 // Mock User Data (Placeholder - replace with actual user fetching if needed)
 UserModel _getMockUser(String userId) {
@@ -126,7 +127,7 @@ class TrustPaymentEngine {
       }
 
       // 4. Generate GeniiPost (FeedModel) of type TrustDistributionEvent
-      final String newPostKey = _database.child("geniiPosts").push().key ?? "fallback_key_${DateTime.now().millisecondsSinceEpoch}";
+      final String newPostKey = _database.child(postsCollectionPath).push().key ?? "fallback_key_${DateTime.now().millisecondsSinceEpoch}"; // Use dynamic path
 
       // The "userId" for the FeedModel could be a system user, the agent initiating, or the property owner.
       // For now, let's use a generic system ID or the first stakeholder's ID as a placeholder.
@@ -136,7 +137,7 @@ class TrustPaymentEngine {
         key: newPostKey,
         userId: eventPosterUserId, // This should ideally be a system/property owner ID
         createdAt: DateTime.now().toUtc().toIso8601String(),
-        postType: "TrustDistributionEvent",
+        postType: PostTypes.TrustDistributionEvent, // Use PostTypes constant
         propertyId: trustAccount.propertyId,
         description: eventDescription ?? "${rule.description ?? triggerEvent} processed for ${trustAccount.name}",
         user: _getMockUser(eventPosterUserId), // Attach mock user object
@@ -148,12 +149,13 @@ class TrustPaymentEngine {
           "ruleDescription": rule.description,
           "distributions": calculatedDistributions,
         },
+        status: PostStatus.New, // Use PostStatus constant
         // Other FeedModel fields like likeCount, commentCount, etc., are not relevant here and will use defaults or be null.
       );
 
-      // 5. Push this post to Firebase under geniiPosts
-      await _database.child("geniiPosts").child(newPostKey).set(eventPost.toJson());
-      print("TrustDistributionEvent post created in Firebase: $newPostKey");
+      // 5. Push this post to Firebase
+      await _database.child(postsCollectionPath).child(newPostKey).set(eventPost.toJson()); // Use dynamic path
+      print("TrustDistributionEvent post created in Firebase ($postsCollectionPath): $newPostKey");
 
     } catch (e) {
       print("Error processing cash inflow: $e");

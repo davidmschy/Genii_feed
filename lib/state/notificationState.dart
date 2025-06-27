@@ -13,6 +13,7 @@ import '../model/user.dart';
 import '../resource/push_notification_service.dart';
 import '../ui/page/common/locator.dart';
 import 'appState.dart';
+import 'package:flutter_twitter_clone/config/firebase_config.dart'; // Import firebase_config
 
 class NotificationState extends AppState {
   // String fcmToken;
@@ -43,7 +44,7 @@ class NotificationState extends AppState {
         query = null;
         _notificationList = null;
       }
-      query = kDatabase.child("notification").child(userId);
+      query = kDatabase.child(notificationsCollectionPath).child(userId); // Use dynamic path
       query!.onChildAdded.listen(_onNotificationAdded);
       query!.onChildChanged.listen(_onNotificationChanged);
       query!.onChildRemoved.listen(_onNotificationRemoved);
@@ -63,7 +64,7 @@ class NotificationState extends AppState {
       }
       isBusy = true;
       kDatabase
-          .child('notification')
+          .child(notificationsCollectionPath) // Use dynamic path
           .child(userId)
           .once()
           .then((DatabaseEvent event) {
@@ -91,7 +92,10 @@ class NotificationState extends AppState {
   /// get `Tweet` present in notification
   Future<FeedModel?> getTweetDetail(String tweetId) async {
     FeedModel _tweetDetail;
-    var event = await kDatabase.child('tweet').child(tweetId).once();
+    // Assuming 'tweet' details are stored under postsCollectionPath now.
+    // If tweets/posts are a separate collection, this path needs to be specific.
+    // Based on previous refactoring, 'tweet' became 'geniiPosts'.
+    var event = await kDatabase.child(postsCollectionPath).child(tweetId).once(); // Use dynamic path for posts
     if (event.snapshot.value != null) {
       var map = event.snapshot.value as Map<dynamic, dynamic>;
       _tweetDetail = FeedModel.fromJson(map);
@@ -108,7 +112,7 @@ class NotificationState extends AppState {
     if (userList.isNotEmpty && userList.any((x) => x.userId == userId)) {
       return Future.value(userList.firstWhere((x) => x.userId == userId));
     }
-    var event = await kDatabase.child('profile').child(userId).once();
+    var event = await kDatabase.child(usersCollectionPath).child(userId).once(); // Use dynamic path
 
     if (event.snapshot.value != null) {
       var map = event.snapshot.value as Map<dynamic, dynamic>;
@@ -121,12 +125,12 @@ class NotificationState extends AppState {
     }
   }
 
-  /// Remove notification if related Tweet is not found or deleted
+  /// Remove notification if related Post is not found or deleted
   void removeNotification(String userId, String tweetkey) async {
-    kDatabase.child('notification').child(userId).child(tweetkey).remove();
+    kDatabase.child(notificationsCollectionPath).child(userId).child(tweetkey).remove(); // Use dynamic path
   }
 
-  /// Trigger when somneone like your tweet
+  /// Trigger when someone like your post
   void _onNotificationAdded(DatabaseEvent event) {
     if (event.snapshot.value != null) {
       var map = event.snapshot.value as Map<dynamic, dynamic>;

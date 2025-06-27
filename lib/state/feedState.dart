@@ -10,6 +10,7 @@ import 'package:flutter_twitter_clone/helper/utility.dart';
 import 'package:flutter_twitter_clone/model/user.dart';
 import 'package:flutter_twitter_clone/state/appState.dart';
 import 'package:flutter_twitter_clone/ui/page/common/locator.dart';
+import 'package:flutter_twitter_clone/config/firebase_config.dart'; // Import firebase_config
 // import 'package:link_preview_generator/link_preview_generator.dart'
 //     show WebInfo;
 import 'package:path/path.dart' as path;
@@ -246,8 +247,7 @@ class FeedState extends AppState {
   Future<bool> databaseInit() {
     try {
       if (_feedQuery == null) {
-        // Reading from "geniiPosts" instead of "tweet"
-        _feedQuery = kDatabase.child("geniiPosts");
+        _feedQuery = kDatabase.child(postsCollectionPath); // Use dynamic path
         _feedQuery!.onChildAdded.listen(_onTweetAdded);
         _feedQuery!.onChildChanged.listen(_onTweetChanged);
         _feedQuery!.onChildRemoved.listen(_onTweetRemoved);
@@ -266,8 +266,7 @@ class FeedState extends AppState {
       isBusy = true;
       _feedList = null;
       notifyListeners();
-      // Reading from "geniiPosts" instead of "tweet"
-      kDatabase.child('geniiPosts').once().then((DatabaseEvent event) {
+      kDatabase.child(postsCollectionPath).once().then((DatabaseEvent event) { // Use dynamic path
         final snapshot = event.snapshot;
         _feedList = <FeedModel>[];
         if (snapshot.value != null) {
@@ -330,9 +329,9 @@ class FeedState extends AppState {
         postID = model.key;
       } else {
         assert(postID != null);
-        // Fetch tweet data from firebase
+        // Fetch post data from firebase
         kDatabase
-            .child('tweet')
+            .child(postsCollectionPath) // Use dynamic path
             .child(postID!)
             .once()
             .then((DatabaseEvent event) {
@@ -357,7 +356,7 @@ class FeedState extends AppState {
               return;
             }
             kDatabase
-                .child('tweet')
+                .child(postsCollectionPath) // Use dynamic path (assuming comments are under same main path)
                 .child(x)
                 .once()
                 .then((DatabaseEvent event) {
@@ -406,7 +405,7 @@ class FeedState extends AppState {
     /// If tweet is not available in feedList then need to fetch it from firebase
     else {
       cprint("Fetched from DB: " + postID);
-      var model = await kDatabase.child('tweet').child(postID).once().then(
+      var model = await kDatabase.child(postsCollectionPath).child(postID).once().then( // Use dynamic path
         (DatabaseEvent event) {
           final snapshot = event.snapshot;
           if (snapshot.value != null) {
@@ -434,7 +433,7 @@ class FeedState extends AppState {
     notifyListeners();
     String? tweetKey;
     try {
-      DatabaseReference dbReference = kDatabase.child('tweet').push();
+      DatabaseReference dbReference = kDatabase.child(postsCollectionPath).push(); // Use dynamic path
 
       await dbReference.set(model.toJson());
 
@@ -473,8 +472,8 @@ class FeedState extends AppState {
   deleteTweet(String tweetId, TweetType type, {String? parentkey} //FIXME
       ) {
     try {
-      /// Delete tweet if it is in nested tweet detail page
-      kDatabase.child('tweet').child(tweetId).remove().then((_) {
+      /// Delete post if it is in nested post detail page
+      kDatabase.child(postsCollectionPath).child(tweetId).remove().then((_) { // Use dynamic path
         if (type == TweetType.Detail &&
             _tweetDetailModelList != null &&
             _tweetDetailModelList!.isNotEmpty) {
@@ -535,12 +534,12 @@ class FeedState extends AppState {
     }
   }
 
-  /// [update] tweet
-  Future<void> updateTweet(FeedModel model) async {
-    await kDatabase.child('tweet').child(model.key!).set(model.toJson());
+  /// [update] post
+  Future<void> updateTweet(FeedModel model) async { // Method name kept for compatibility, but operates on postsCollectionPath
+    await kDatabase.child(postsCollectionPath).child(model.key!).set(model.toJson()); // Use dynamic path
   }
 
-  /// Add/Remove like on a Tweet
+  /// Add/Remove like on a Post
   /// [postId] is tweet id, [userId] is user's id who like/unlike Tweet
   addLikeToTweet(FeedModel tweet, String userId) {
     try {
@@ -556,17 +555,17 @@ class FeedState extends AppState {
         tweet.likeList!.add(userId);
         tweet.likeCount = tweet.likeCount! + 1;
       }
-      // update likeList of a tweet
+      // update likeList of a post
       kDatabase
-          .child('tweet')
+          .child(postsCollectionPath) // Use dynamic path
           .child(tweet.key!)
           .child('likeList')
           .set(tweet.likeList);
 
-      // Sends notification to user who created tweet
+      // Sends notification to user who created post
       // UserModel owner can see notification on notification page
       kDatabase
-          .child('notification')
+          .child(notificationsCollectionPath) // Use dynamic path
           .child(tweet.userId)
           .child(tweet.key!)
           .set({
@@ -591,7 +590,7 @@ class FeedState extends AppState {
         FeedModel tweet =
             _feedList!.firstWhere((x) => x.key == _tweetToReplyModel!.key);
         var json = replyTweet.toJson();
-        DatabaseReference ref = kDatabase.child('tweet').push();
+        DatabaseReference ref = kDatabase.child(postsCollectionPath).push(); // Use dynamic path
         await ref.set(json);
         tweet.replyTweetKeyList!.add(ref.key);
         await updateTweet(tweet);
@@ -613,12 +612,12 @@ class FeedState extends AppState {
     final pref = getIt<SharedPreferenceHelper>();
     var userId = await pref.getUserProfile().then((value) => value!.userId);
     DatabaseReference dbReference =
-        kDatabase.child('bookmark').child(userId!).child(tweetId);
+        kDatabase.child(bookmarksCollectionPath).child(userId!).child(tweetId); // Use dynamic path
     await dbReference.set(
         {"tweetId": tweetId, "created_at": DateTime.now().toUtc().toString()});
   }
 
-  /// Trigger when any tweet changes or update
+  /// Trigger when any post changes or update
   /// When any tweet changes it update it in UI
   /// No matter if Tweet is in home page or in detail page or in comment section.
   _onTweetChanged(DatabaseEvent event) {

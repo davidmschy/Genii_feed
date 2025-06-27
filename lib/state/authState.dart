@@ -18,6 +18,9 @@ import 'package:path/path.dart' as path;
 import 'package:geolocator/geolocator.dart'; // For Position
 import 'package:flutter_twitter_clone/services/location_service.dart'; // For LocationService
 import 'package:flutter_twitter_clone/services/listing_ingest_service.dart'; // For ListingIngestService
+import 'package:flutter_twitter_clone/config/firebase_config.dart'; // Import firebase_config
+import 'package:flutter_twitter_clone/config/app_config.dart'; // Import app_config for kAppTestMode
+import 'package:flutter_twitter_clone/helper/enum.dart'; // For UserRoles
 
 import 'appState.dart';
 
@@ -66,7 +69,7 @@ class AuthState extends AppState {
   void databaseInit() {
     try {
       if (_profileQuery == null) {
-        _profileQuery = kDatabase.child("profile").child(user!.uid);
+        _profileQuery = kDatabase.child(usersCollectionPath).child(user!.uid); // Use dynamic path
         _profileQuery!.onValue.listen(_onProfileChanged);
         _profileQuery!.onChildChanged.listen(_onProfileUpdated);
       }
@@ -218,7 +221,7 @@ class AuthState extends AppState {
       user.createdAt = DateTime.now().toUtc().toString();
     }
 
-    kDatabase.child('profile').child(user.userId!).set(user.toJson());
+    kDatabase.child(usersCollectionPath).child(user.userId!).set(user.toJson()); // Use dynamic path
     _userModel = user;
     isBusy = false;
   }
@@ -249,10 +252,39 @@ class AuthState extends AppState {
           ListingIngestService().fetchAndPostListingsForUser(_userModel!); // No await, background task
         }
       } else {
-        authStatus = AuthStatus.NOT_LOGGED_IN;
+        // No Firebase user found
+        if (kAppTestMode) {
+          cprint("No Firebase user logged in, but kAppTestMode is true. Setting up mock user.", infoIn: "getCurrentUser");
+          _userModel = UserModel(
+            userId: "test_user_001",
+            key: "test_user_001",
+            displayName: "Genii Tester",
+            userName: "geniitester",
+            email: "tester@genii.app",
+            profilePic: "https://i.pravatar.cc/150?u=geniitester",
+            roles: [UserRoles.Owner, UserRoles.Investor, UserRoles.Agent], // Give test user multiple roles
+            currentRole: UserRoles.Owner, // Default to Owner
+            preferredZip: "93711", // Default test ZIP
+            preferredLat: 36.7378,
+            preferredLng: -119.7871,
+            isVerified: true,
+            createdAt: DateTime.now().toIso8601String()
+          );
+          authStatus = AuthStatus.LOGGED_IN; // Simulate logged in status
+          userId = _userModel!.userId!;
+          // Optionally, trigger listing ingest for this mock user's test ZIP
+          ListingIngestService().fetchAndPostListingsForUser(_userModel!);
+          // No need to call notifyListeners() here if isBusy is set at the end,
+          // but if other listeners depend on _userModel being set synchronously, it might be needed.
+          // For now, relying on the final isBusy=false and notifyListeners() in the finally block if it were there.
+          // Since there's no finally block, and isBusy is set before returning, this should be okay.
+        } else {
+          authStatus = AuthStatus.NOT_LOGGED_IN;
+        }
       }
       isBusy = false;
-      return user;
+      // Return the Firebase user if it exists, otherwise null (mock user is only for local state)
+      return _firebaseAuth.currentUser;
     } catch (error) {
       isBusy = false;
       cprint(error, errorIn: 'getCurrentUser');
@@ -372,7 +404,7 @@ class AuthState extends AppState {
   /// `Fetch` user `detail` whose userId is passed
   Future<UserModel?> getUserDetail(String userId) async {
     UserModel user;
-    var event = await kDatabase.child('profile').child(userId).once();
+    var event = await kDatabase.child(usersCollectionPath).child(userId).once(); // Use dynamic path
 
     final map = event.snapshot.value as Map?;
     if (map != null) {
@@ -390,7 +422,7 @@ class AuthState extends AppState {
     try {
       userProfileId = userProfileId ?? user!.uid;
       kDatabase
-          .child("profile")
+          .child(usersCollectionPath) // Use dynamic path
           .child(userProfileId)
           .once()
           .then((DatabaseEvent event) async {
@@ -518,8 +550,8 @@ class AuthState extends AppState {
     };
 
     try {
-      await kDatabase.child('profile').child(userId).update(locationUpdate);
-      cprint("User location preferences updated in Firebase for user $userId: $zip, $lat, $lng");
+      await kDatabase.child(usersCollectionPath).child(userId).update(locationUpdate); // Use dynamic path
+      cprint("User location preferences updated in Firebase ($usersCollectionPath) for user $userId: $zip, $lat, $lng");
 
       // If this is the currently logged-in user, update the local model and notify.
       if (_userModel != null && _userModel!.userId == userId) {
