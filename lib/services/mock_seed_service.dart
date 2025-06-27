@@ -170,22 +170,8 @@ class MockSeedService {
         },
       ));
 
-      // PropertyListing posts are now handled by ListingIngestService with live data
-      // So, we remove the mock PropertyListing generation from here.
-      /*
-      postsToSeed.add(FeedModel(
-        key: _database.child("geniiPosts").push().key,
-        userId: ownerUser.userId!, user: ownerUser, createdAt: now, // System or agent might post this
-        postType: PostTypes.PropertyListing, propertyId: "prop_external_${_uuid.v4()}", // Not one of our properties, but a listing
-        description: "New listing found on Zillow: Spacious 4 bed in downtown.",
-        eventPayload: {
-          'address': "789 Pine St, Anytown, USA", 'price': 620000, 'bedrooms': 4, 'bathrooms': 3, 'sqft': 2200,
-          'imageUrl': "https://picsum.photos/seed/prop1/600/400", 'source': "Zillow",
-          'listingUrl': "https://www.zillow.com/some-listing-id"
-          // Ensure 'zip' is added here if this mock were to be used with geo-filtering
-        },
-      ));
-      */
+      // PropertyListing posts are now handled by ListingIngestService with live data.
+      // The logic for creating mock property listings will be moved to a separate method for fallback.
 
       for (var post in postsToSeed) {
         await _database.child("geniiPosts").child(post.key!).set(post.toJson());
@@ -193,7 +179,9 @@ class MockSeedService {
       print("${postsToSeed.length} initial non-PropertyListing posts seeded by MockSeedService.");
 
       // Trigger AgentReply for the AgentPrompt
-      await MockAgentEngine().processAgentPrompt(agentPromptPost);
+      if (postsToSeed.any((p) => p.postType == PostTypes.AgentPrompt)) { // Check if an agent prompt was actually seeded
+          await MockAgentEngine().processAgentPrompt(agentPromptPost);
+      }
       print("AgentReply triggered for seeded AgentPrompt.");
 
       // Trigger TrustDistributionEvent
@@ -279,5 +267,65 @@ extension PropertyCopyWith on Property {
       agentIds: agentIds ?? this.agentIds,
       moduleIds: moduleIds ?? this.moduleIds,
     );
+  }
+}
+
+// New method to generate and post mock listings, intended for fallback use by ListingIngestService
+extension MockListingGenerator on MockSeedService {
+  Future<void> generateAndPostMockListings(
+    String zipCode,
+    int count,
+    {required String authorId, UserModel? authorUser}
+  ) async {
+    if (zipCode.isEmpty) {
+      print("MockSeedService: ZIP code is empty, cannot generate mock listings.");
+      return;
+    }
+    print("MockSeedService: Generating $count fallback mock listings for ZIP $zipCode, author $authorId.");
+    List<FeedModel> mockListings = [];
+    final Random random = Random();
+    final Uuid uuid = Uuid(); // Local Uuid instance
+
+    for (int i = 0; i < count; i++) {
+      String mockPropertyId = "fallback_mock_${uuid.v4().substring(0, 8)}";
+      int beds = random.nextInt(3) + 2; // 2-4 beds
+      int baths = random.nextInt(2) + 1; // 1-2 baths
+      int sqft = 1000 + random.nextInt(1500); // 1000-2499 sqft
+      int price = (120000 + random.nextInt(280000)) ~/ 1000 * 1000; // Slightly lower prices for fallback
+      String source = random.nextBool() ? "Zillow (Fallback Mock)" : "Redfin (Fallback Mock)";
+
+      FeedModel listing = FeedModel(
+        key: _database.child("geniiPosts").push().key,
+        userId: authorId,
+        user: authorUser, // Can be null if only authorId is provided
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        postType: PostTypes.PropertyListing,
+        propertyId: mockPropertyId,
+        description: "$source: $beds bed, $baths bath in $zipCode (fallback)",
+        eventPayload: {
+          'source': source,
+          'address': "${random.nextInt(700) + 100} Fallback St, Mocktown, $zipCode",
+          'price': price,
+          'imageUrl': "https://picsum.photos/seed/$mockPropertyId/600/400",
+          'propertyType': "Single Family (Mock)",
+          'bed': beds,
+          'bath': baths,
+          'sqft': sqft,
+          'zip': zipCode,
+          'listingUrl': "https://example.com/fallback/$mockPropertyId"
+        },
+        status: "New (Fallback)",
+      );
+      mockListings.add(listing);
+    }
+
+    for (var post in mockListings) {
+      try {
+        await _database.child("geniiPosts").child(post.key!).set(post.toJson());
+      } catch (e) {
+        print("MockSeedService: Error saving fallback listing ${post.key} to Firebase: $e");
+      }
+    }
+    print("MockSeedService: ${mockListings.length} fallback mock listings posted for ZIP $zipCode.");
   }
 }

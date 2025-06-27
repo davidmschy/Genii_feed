@@ -71,3 +71,15 @@ class AgentTypes {
   static const String Concierge = "Concierge";
   // Add any other specific agent types here
 }
+
+// String constants for GeniiPost status
+class PostStatus {
+  static const String Open = "Open";
+  static const String InProgress = "InProgress";
+  static const String PendingApproval = "PendingApproval";
+  static const String Resolved = "Resolved";
+  static const String Closed = "Closed";
+  static const String Archived = "Archived";
+  static const String Draft = "Draft";
+  static const String New = "New"; // For new listings, etc.
+}
