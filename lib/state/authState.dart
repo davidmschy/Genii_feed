@@ -15,6 +15,9 @@ import 'package:flutter_twitter_clone/model/user.dart';
 import 'package:flutter_twitter_clone/ui/page/common/locator.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:path/path.dart' as path;
+import 'package:geolocator/geolocator.dart'; // For Position
+import 'package:flutter_twitter_clone/services/location_service.dart'; // For LocationService
+import 'package:flutter_twitter_clone/services/listing_ingest_service.dart'; // For ListingIngestService
 
 import 'appState.dart';
 
@@ -227,9 +230,24 @@ class AuthState extends AppState {
       Utility.logEvent('get_currentUSer', parameter: {});
       user = _firebaseAuth.currentUser;
       if (user != null) {
-        await getProfileUser();
+        await getProfileUser(); // This populates _userModel
         authStatus = AuthStatus.LOGGED_IN;
         userId = user!.uid;
+        // After user profile is loaded, fetch their location if not already set
+        if (_userModel != null && (_userModel!.preferredZip == null || _userModel!.preferredZip!.isEmpty)) {
+          cprint("User profile loaded, preferredZip is missing. Fetching location and then listings.", infoIn: "getCurrentUser");
+          fetchAndSetCurrentUserLocation().then((_) {
+            // After location is set (or attempted), if zip is now available, fetch listings
+            if (_userModel?.preferredZip != null && _userModel!.preferredZip!.isNotEmpty) {
+              ListingIngestService().fetchAndPostListingsForUser(_userModel!); // No await, background task
+            }
+          });
+        } else if (_userModel != null && _userModel!.preferredZip != null && _userModel!.preferredZip!.isNotEmpty) {
+          cprint("User profile loaded, preferredZip already exists: ${_userModel!.preferredZip}. Fetching listings.", infoIn: "getCurrentUser");
+          // Fetch listings if ZIP is already there (e.g. on subsequent app starts)
+          // Add a flag/timestamp check here later to avoid fetching too often. For now, always fetch.
+          ListingIngestService().fetchAndPostListingsForUser(_userModel!); // No await, background task
+        }
       } else {
         authStatus = AuthStatus.NOT_LOGGED_IN;
       }
@@ -480,6 +498,96 @@ class AuthState extends AppState {
     } catch (e) {
       cprint("Error saving user model after updating current role: $e", errorIn: "updateUserCurrentRole");
       // Optionally, revert _userModel.currentRole or handle error appropriately.
+    }
+  }
+
+  /// Updates the user's location preferences in Firebase and locally.
+  Future<void> updateUserLocationPreferences(String userId, double? lat, double? lng, String? zip) async {
+    if (_userModel == null || _userModel!.userId != userId) {
+      // If the local userModel is not the one we're updating,
+      // we might need to fetch it first or just update Firebase directly.
+      // For now, we'll primarily focus on updating Firebase.
+      // If it's the current user, we'll update the local model too.
+      cprint("Updating location for user ID: $userId (may not be the currently loaded _userModel)", warningIn: "updateUserLocationPreferences");
+    }
+
+    Map<String, dynamic> locationUpdate = {
+      'preferredLat': lat,
+      'preferredLng': lng,
+      'preferredZip': zip,
+    };
+
+    try {
+      await kDatabase.child('profile').child(userId).update(locationUpdate);
+      cprint("User location preferences updated in Firebase for user $userId: $zip, $lat, $lng");
+
+      // If this is the currently logged-in user, update the local model and notify.
+      if (_userModel != null && _userModel!.userId == userId) {
+        _userModel = _userModel!.copyWith(
+          preferredLat: lat,
+          preferredLng: lng,
+          preferredZip: zip,
+        );
+        // The createUser method also calls notifyListeners and saves the whole model,
+        // but since we only updated specific fields, a direct update and notify might be cleaner.
+        // However, to ensure consistency with how other profile updates are handled (e.g. via createUser),
+        // we could call createUser or a similar method that saves the entire model.
+        // For now, let's update locally and notify. The next full profile save would catch it.
+        // OR, more robustly, ensure the local model is fully updated and then call createUser.
+
+        // Let's use a targeted local update and then ensure persistence through createUser
+        // which handles the full userModel object.
+        // CreateUser will also call notifyListeners.
+        createUser(_userModel!); // This will save the whole model including new location.
+        cprint("Local userModel updated with new location preferences.");
+      }
+    } catch (e) {
+      cprint("Error updating user location preferences in Firebase for user $userId: $e", errorIn: "updateUserLocationPreferences");
+    }
+  }
+
+  /// Fetches the current user's location, derives ZIP code, and updates their profile.
+  /// To be called after login or on app start if location data is missing.
+  Future<void> fetchAndSetCurrentUserLocation() async {
+    if (user == null || _userModel == null) {
+      cprint("No logged-in user to fetch location for.", warningIn: "fetchAndSetCurrentUserLocation");
+      return;
+    }
+
+    // Optional: Check if location is already set and recent enough
+    // if (_userModel!.preferredZip != null && _userModel!.preferredZip!.isNotEmpty) {
+    //   // Potentially check a timestamp if we add one for last location update
+    //   cprint("User location already set to ZIP: ${_userModel!.preferredZip}. Skipping fetch.", infoIn: "fetchAndSetCurrentUserLocation");
+    //   return;
+    // }
+
+    final locationService = LocationService(); // Assuming LocationService is in scope (import may be needed)
+
+    final hasPermission = await locationService.handleLocationPermission();
+    if (!hasPermission) {
+      cprint("Location permission not granted. Cannot fetch location.", warningIn: "fetchAndSetCurrentUserLocation");
+      // Optionally, notify the user through a UI message that location is needed for some features.
+      return;
+    }
+
+    cprint("Fetching current position...", infoIn: "fetchAndSetCurrentUserLocation");
+    Position? position = await locationService.getCurrentPosition();
+
+    if (position != null) {
+      cprint("Position fetched: Lat ${position.latitude}, Lng ${position.longitude}", infoIn: "fetchAndSetCurrentUserLocation");
+      String? zipCode = await locationService.getZipCodeFromCoordinates(position.latitude, position.longitude);
+
+      if (zipCode != null) {
+        cprint("ZIP code derived: $zipCode. Updating user preferences.", infoIn: "fetchAndSetCurrentUserLocation");
+        await updateUserLocationPreferences(user!.uid, position.latitude, position.longitude, zipCode);
+        // updateUserLocationPreferences already calls notifyListeners through createUser
+      } else {
+        cprint("Could not derive ZIP code from coordinates.", warningIn: "fetchAndSetCurrentUserLocation");
+        // Optionally, still save lat/lng even if ZIP is not found
+        // await updateUserLocationPreferences(user.uid, position.latitude, position.longitude, null);
+      }
+    } else {
+      cprint("Could not fetch current position.", warningIn: "fetchAndSetCurrentUserLocation");
     }
   }
 }

@@ -111,65 +111,57 @@ class FeedState extends AppState {
 
     // Apply Role-Based Filtering
     final String? activeRole = currentUser?.currentRole;
+    List<FeedModel> roleFilteredPosts = [];
 
     if (activeRole == null) {
-      // If no role is active, show all non-role-specific posts or a limited set.
-      // For now, let's assume it shows posts that are not explicitly role-restricted,
-      // or perhaps just 'Tweet' and 'PropertyListing' as a default.
-      // This behavior can be refined.
-      // filteredList = postsToFilter.where((post) {
-      //   return post.postType == PostTypes.Tweet || post.postType == PostTypes.PropertyListing;
-      // }).toList();
-      // For simplicity in this step, if no role, show all from `postsToFilter`
-      filteredList.addAll(postsToFilter);
-      cprint("No active role, showing all posts after conceptual filters.");
+      roleFilteredPosts.addAll(postsToFilter);
+      cprint("No active role, showing all posts after conceptual filters for role check.");
     } else {
       cprint("Filtering for role: $activeRole");
       Map<String, List<String>> rolePermissions = {
-        UserRoles.Owner: [// All types are visible to Owner
-          PostTypes.PropertyListing, PostTypes.LoanUpdate, PostTypes.AgentPrompt,
-          PostTypes.AgentReply, PostTypes.TaskUpdate, PostTypes.CashFlowEvent,
-          PostTypes.ExternalAPI, PostTypes.ServiceMatch, PostTypes.TrustDistributionEvent, PostTypes.Tweet
-        ],
+        UserRoles.Owner: PostTypes.values, // Owner sees all defined post types
         UserRoles.Agent: [
-          PostTypes.AgentPrompt, PostTypes.AgentReply, PostTypes.PropertyListing, PostTypes.TaskUpdate
+          PostTypes.AgentPrompt, PostTypes.AgentReply, PostTypes.PropertyListing, PostTypes.TaskUpdate, PostTypes.Tweet
         ],
         UserRoles.Investor: [
-          PostTypes.PropertyListing, PostTypes.TrustDistributionEvent, PostTypes.LoanUpdate, PostTypes.CashFlowEvent
+          PostTypes.PropertyListing, PostTypes.TrustDistributionEvent, PostTypes.LoanUpdate, PostTypes.CashFlowEvent, PostTypes.Tweet
         ],
         UserRoles.Contractor: [
-          PostTypes.TaskUpdate, PostTypes.ServiceMatch
+          PostTypes.TaskUpdate, PostTypes.ServiceMatch, PostTypes.Tweet
         ],
         UserRoles.Lender: [
-          PostTypes.LoanUpdate, PostTypes.TrustDistributionEvent, PostTypes.CashFlowEvent
+          PostTypes.LoanUpdate, PostTypes.TrustDistributionEvent, PostTypes.CashFlowEvent, PostTypes.Tweet
         ],
-        // Tenant and Manufacturer roles can be added here if they have specific views
-         UserRoles.Tenant: [ // Example: Tenants might see property announcements or service updates
-            PostTypes.PropertyListing, // General property info they might be interested in
-            // Potentially a new PostType like "Announcement" or relevant "ServiceMatch"
-        ],
-        UserRoles.Manufacturer: [ // Example: Might see requests for proposals or specific supply chain tasks
-            // Potentially new PostTypes like "SupplyRequest" or relevant "TaskUpdate"
-        ],
+        UserRoles.Tenant: [ PostTypes.PropertyListing, PostTypes.Tweet ], // Example
+        UserRoles.Manufacturer: [ PostTypes.Tweet ], // Example
       };
 
-      List<String>? allowedTypes = rolePermissions[activeRole];
+      List<String> allowedTypes = rolePermissions[activeRole] ?? [PostTypes.Tweet]; // Default to Tweet if role not mapped explicitly
 
-      if (activeRole == UserRoles.Owner) { // Owner sees all
-        filteredList.addAll(postsToFilter);
-      } else if (allowedTypes != null) {
-        filteredList.addAll(postsToFilter.where((post) {
-          return allowedTypes.contains(post.postType);
-          // Additionally, more granular checks can be added here:
-          // e.g., for a Contractor, only show TaskUpdates where post.payload['contractorId'] == currentUser.userId
-          // e.g., for an Agent, only show AgentPrompts/Replies relevant to them (post.agentId == currentUser.userId)
-          // For now, it's a simple postType check.
-        }));
+      if (activeRole == UserRoles.Owner) {
+        roleFilteredPosts.addAll(postsToFilter);
       } else {
-        // Role not in map or has no specific permissions defined, show nothing or a default set.
-        // For now, show nothing if role has no explicit permissions (except Owner).
-         cprint("Role $activeRole has no specific post types defined, showing no posts.");
+        roleFilteredPosts.addAll(postsToFilter.where((post) => allowedTypes.contains(post.postType)));
       }
+    }
+
+    // Apply Geolocation Filtering (for PropertyListings)
+    final String? userZip = currentUser?.preferredZip;
+    if (userZip != null && userZip.isNotEmpty) {
+      cprint("Applying geolocation filter for ZIP: $userZip");
+      // Iterate over roleFilteredPosts and apply geo-filter only to PropertyListings
+      // This ensures other post types visible to the role are not incorrectly filtered out by geo
+      filteredList.addAll(roleFilteredPosts.where((post) {
+        if (post.postType == PostTypes.PropertyListing) {
+          final postZip = post.eventPayload?['zip'] as String?;
+          return postZip == userZip;
+        }
+        return true; // Keep non-PropertyListing posts that passed role filter
+      }));
+    } else {
+      // If no user ZIP, then all role-filtered posts are included
+      filteredList.addAll(roleFilteredPosts);
+      cprint("No user ZIP for geo-filtering, showing all role-filtered posts.");
     }
 
     // Original logic from getTweetList (related to comments and specific user posts) - RE-EVALUATE

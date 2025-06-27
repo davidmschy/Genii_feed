@@ -13,6 +13,7 @@ import 'package:flutter_twitter_clone/widgets/url_text/customUrlText.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_twitter_clone/helper/enum.dart'; // For UserRoles, AppIcon if needed for roles
 import 'package:flutter_twitter_clone/services/mock_seed_service.dart'; // Import for seeder
+import 'package:flutter_twitter_clone/services/listing_ingest_service.dart'; // Import for listing ingest
 
 class SidebarMenu extends StatefulWidget {
   const SidebarMenu({Key? key, this.scaffoldKey}) : super(key: key);
@@ -24,6 +25,27 @@ class SidebarMenu extends StatefulWidget {
 }
 
 class _SidebarMenuState extends State<SidebarMenu> {
+  late TextEditingController _zipController;
+
+  @override
+  void initState() {
+    super.initState();
+    _zipController = TextEditingController();
+    // Initialize text field with current user's zip if available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authState = context.read<AuthState>();
+      if (authState.userModel?.preferredZip != null) {
+        _zipController.text = authState.userModel!.preferredZip!;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _zipController.dispose();
+    super.dispose();
+  }
+
   Widget _menuHeader() {
     final state = context.watch<AuthState>();
     if (state.userModel == null) {
@@ -39,6 +61,10 @@ class _SidebarMenuState extends State<SidebarMenu> {
         _logOut();
       });
     } else {
+      // Update zip controller if userModel changes (e.g. after login or location fetch)
+      if (state.userModel!.preferredZip != null && _zipController.text != state.userModel!.preferredZip) {
+          _zipController.text = state.userModel!.preferredZip!;
+      }
       return Center(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,8 +149,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
       onTap: () {
         var authState = context.read<AuthState>();
         late List<String> usersList;
-        // authState.getProfileUser(); // This might not be needed here if userModel is already up-to-date
-        Navigator.pop(context); // Close drawer before navigating
+        Navigator.pop(context);
         switch (navigateTo) {
           case "FollowerListPage":
             usersList = authState.userModel!.followersList ?? [];
@@ -168,10 +193,6 @@ class _SidebarMenuState extends State<SidebarMenu> {
     return ListTile(
       onTap: () {
         if (onPressed != null) {
-          // Close drawer before executing onPressed, if it doesn't navigate itself
-          if (title != "Logout" && title != "Settings and privacy") { // Example: keep drawer open for settings or logout confirmation
-             // Navigator.pop(context);
-          }
           onPressed();
         }
       },
@@ -208,18 +229,15 @@ class _SidebarMenuState extends State<SidebarMenu> {
       currentDisplayRole = authState.userModel!.roles.isNotEmpty ? authState.userModel!.roles.first : null;
     }
 
-    if (currentDisplayRole == null && authState.userModel!.roles.isEmpty) {
+    if (currentDisplayRole == null && authState.userModel!.roles.isEmpty) { // Should be caught by first check
         return const SizedBox.shrink();
     }
-    // If currentDisplayRole is still null but roles list is not empty, pick the first one.
-    // This ensures DropdownButton always has a valid value if items are available.
     if (currentDisplayRole == null && authState.userModel!.roles.isNotEmpty) {
         currentDisplayRole = authState.userModel!.roles.first;
     }
 
-
     return ListTile(
-      dense: true, // Makes the ListTile a bit more compact
+      dense: true,
       leading: Padding(
         padding: const EdgeInsets.only(top: 0, left: 5),
         child: customIcon(
@@ -229,37 +247,102 @@ class _SidebarMenuState extends State<SidebarMenu> {
           iconColor: AppColor.darkGrey,
         ),
       ),
-      title: Container(
-        // No horizontal padding for DropdownButton itself, ListTile handles padding
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: currentDisplayRole,
-            isExpanded: true,
-            icon: Icon(AppIcon.arrowDown, color: AppColor.primary, size: 20),
-            onChanged: (String? newValue) {
-              if (newValue != null) {
-                context.read<AuthState>().updateUserCurrentRole(newValue);
-                 Navigator.pop(context); // Close drawer after role selection
-              }
-            },
-            items: authState.userModel!.roles
-                .map<DropdownMenuItem<String>>((String value) {
-              return DropdownMenuItem<String>(
-                value: value,
-                child: Text(
-                  value,
-                  style: const TextStyle(fontSize: 18, color: AppColor.secondary),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }).toList(),
-            hint: const Text("Select Role", style: TextStyle(fontSize: 18, color: AppColor.lightGrey)),
-          ),
+      title: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: currentDisplayRole,
+          isExpanded: true,
+          icon: Icon(AppIcon.arrowDown, color: AppColor.primary, size: 20),
+          onChanged: (String? newValue) {
+            if (newValue != null) {
+              context.read<AuthState>().updateUserCurrentRole(newValue);
+              Navigator.pop(context);
+            }
+          },
+          items: authState.userModel!.roles
+              .map<DropdownMenuItem<String>>((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Text(
+                value,
+                style: const TextStyle(fontSize: 18, color: AppColor.secondary),
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          }).toList(),
+          hint: const Text("Select Role", style: TextStyle(fontSize: 18, color: AppColor.lightGrey)),
         ),
       ),
     );
   }
 
+  Widget _buildLocationTools() {
+    final authState = context.watch<AuthState>();
+    if (authState.userModel == null) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _menuListRowButton('Fetch Listings (My ZIP)', icon: AppIcon.refresh, isEnable: true, onPressed: () {
+          Navigator.pop(context);
+          if (authState.userModel?.preferredZip != null && authState.userModel!.preferredZip!.isNotEmpty) {
+            ListingIngestService().fetchAndPostListingsForUser(authState.userModel!).then((_) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Fetching listings for your ZIP...")),
+              );
+            }).catchError((e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text("Error fetching listings: $e")),
+              );
+            });
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Your preferred ZIP code is not set. Please update it.")),
+            );
+          }
+        }),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: Text("Update Location (Dev):", style: TextStyles.titleStyle.copyWith(fontSize: 16)),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: TextField(
+            controller: _zipController,
+            decoration: const InputDecoration(
+              labelText: "Enter ZIP Code",
+              hintText: "e.g. 90210",
+            ),
+            keyboardType: TextInputType.number,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColor.primary),
+            onPressed: () async {
+              Navigator.pop(context);
+              final newZip = _zipController.text.trim();
+              if (newZip.isNotEmpty && authState.userModel != null) {
+                // For simplicity, setting lat/lng to null when ZIP is manually updated.
+                // A more robust solution might try to geocode the new ZIP to get lat/lng.
+                await authState.updateUserLocationPreferences(authState.userModel!.userId!, null, null, newZip);
+                ScaffoldMessenger.of(context).showSnackBar(
+                   SnackBar(content: Text("Preferred ZIP updated to $newZip. Fetching new listings...")),
+                );
+                // Fetch new listings for the new ZIP
+                ListingIngestService().fetchAndPostListingsForUser(authState.userModel!);
+              } else {
+                 ScaffoldMessenger.of(context).showSnackBar(
+                   const SnackBar(content: Text("Please enter a valid ZIP code.")),
+                );
+              }
+            },
+            child: const Text("Update ZIP & Fetch Listings", style: TextStyle(color: Colors.white)),
+          ),
+        ),
+      ],
+    );
+  }
 
   Positioned _footer() {
     return Positioned(
@@ -283,12 +366,12 @@ class _SidebarMenuState extends State<SidebarMenu> {
               const Spacer(),
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context); // Close drawer
+                  Navigator.pop(context);
                   if (context.read<AuthState>().userModel != null) {
                      Navigator.push(
                         context,
                         ScanScreen.getRoute(
-                            context.read<AuthState>().userModel!)); // profileUserModel changed to userModel
+                            context.read<AuthState>().userModel!));
                   }
                 },
                 child: Image.asset(
@@ -320,6 +403,14 @@ class _SidebarMenuState extends State<SidebarMenu> {
 
   @override
   Widget build(BuildContext context) {
+    // Ensure _zipController is initialized with current user's ZIP when widget builds/rebuilds
+    // This is especially important if the user logs out and logs back in or if authState updates.
+    final authState = context.watch<AuthState>();
+    if (authState.userModel?.preferredZip != null && _zipController.text != authState.userModel!.preferredZip) {
+        _zipController.text = authState.userModel!.preferredZip!;
+    }
+
+
     return Drawer(
       child: SafeArea(
         child: Stack(
@@ -336,7 +427,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                   _menuListRowButton('Profile',
                       icon: AppIcon.profile, isEnable: true, onPressed: () {
                     var state = context.read<AuthState>();
-                     Navigator.pop(context); // Close drawer
+                     Navigator.pop(context);
                     Navigator.push(
                         context, ProfilePage.getRoute(profileId: state.userId));
                   }),
@@ -345,25 +436,23 @@ class _SidebarMenuState extends State<SidebarMenu> {
                     icon: AppIcon.bookmark,
                     isEnable: true,
                     onPressed: () {
-                       Navigator.pop(context); // Close drawer
+                       Navigator.pop(context);
                       Navigator.push(context, BookmarkPage.getRoute());
                     },
                   ),
-                  _menuListRowButton('Lists', icon: AppIcon.lists), // onPressed: () { Navigator.pop(context); ...}
-                  _menuListRowButton('Moments', icon: AppIcon.moments), // onPressed: () { Navigator.pop(context); ...}
+                  _menuListRowButton('Lists', icon: AppIcon.lists, onPressed: (){ Navigator.pop(context);}),
+                  _menuListRowButton('Moments', icon: AppIcon.moments, onPressed: (){ Navigator.pop(context);}),
                   const Divider(),
                   _buildRoleSwitcher(),
                   const Divider(),
-                  _menuListRowButton('Seed Mock Data', icon: AppIcon.seed, isEnable: true, onPressed: () { // Seed Data Button
-                    Navigator.pop(context); // Close drawer
+                   _menuListRowButton('Seed Mock Data', icon: AppIcon.seed, isEnable: true, onPressed: () {
+                    Navigator.pop(context);
                     final authState = context.read<AuthState>();
                     if (authState.userId.isNotEmpty) {
                       MockSeedService().seedInitialData(currentAuthUserId: authState.userId).then((_) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text("Mock data seeding initiated.")),
                         );
-                        // Optionally, refresh feed or other states if needed
-                        // Provider.of<FeedState>(context, listen: false).getDataFromDatabase();
                       }).catchError((e) {
                          ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text("Error seeding data: $e")),
@@ -376,11 +465,13 @@ class _SidebarMenuState extends State<SidebarMenu> {
                     }
                   }),
                   const Divider(),
+                  _buildLocationTools(), // Location Tools Section
+                  const Divider(),
                   _menuListRowButton('Settings and privacy', isEnable: true,
                       onPressed: () {
                     _navigateTo('SettingsAndPrivacyPage');
                   }),
-                  _menuListRowButton('Help Center'), // onPressed: () { Navigator.pop(context); ...}
+                  _menuListRowButton('Help Center', onPressed: (){ Navigator.pop(context);}),
                   const Divider(),
                   _menuListRowButton('Logout',
                       icon: null, onPressed: _logOut, isEnable: true),

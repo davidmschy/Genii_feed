@@ -44,6 +44,12 @@ class PostTypes {
   static const String ExternalAPI = "ExternalAPI"; // For generic posts from other external APIs
   static const String ServiceMatch = "ServiceMatch"; // For TaskRabbit, Angi, etc.
   static const String RentalUpdate = "RentalUpdate"; // For Airbnb, Vrbo, etc. (mentioned in API section of prompt)
+
+  // Helper to get all post type values, useful for "Owner" role seeing all
+  static List<String> get values => [
+        Tweet, TrustDistributionEvent, PropertyListing, LoanUpdate, AgentPrompt,
+        AgentReply, TaskUpdate, CashFlowEvent, ExternalAPI, ServiceMatch, RentalUpdate
+      ];
 }
 
 // String constants for User Roles

@@ -26,6 +26,11 @@ class UserModel extends Equatable {
   List<String> roles;
   String? currentRole;
 
+  // New fields for Geolocation Preferences
+  double? preferredLat;
+  double? preferredLng;
+  String? preferredZip;
+
   UserModel({
     this.email,
     this.userId,
@@ -48,6 +53,9 @@ class UserModel extends Equatable {
     this.followingList,
     List<String>? roles, // Made roles an optional named parameter
     this.currentRole,
+    this.preferredLat,
+    this.preferredLng,
+    this.preferredZip,
   }) : roles = roles ?? []; // Initialize roles to an empty list if null
 
   UserModel.fromJson(Map<dynamic, dynamic>? map) : roles = [] { // Initialize roles here too
@@ -94,6 +102,11 @@ class UserModel extends Equatable {
       roles = []; // Ensure roles is initialized even if not in JSON
     }
     currentRole = map['currentRole'];
+
+    // Deserialize geolocation preferences
+    preferredLat = map['preferredLat'] as double?;
+    preferredLng = map['preferredLng'] as double?;
+    preferredZip = map['preferredZip'] as String?;
   }
 
   toJson() {
@@ -120,6 +133,9 @@ class UserModel extends Equatable {
       // Serialize new fields
       'roles': roles,
       'currentRole': currentRole,
+      'preferredLat': preferredLat,
+      'preferredLng': preferredLng,
+      'preferredZip': preferredZip,
     };
   }
 
@@ -145,6 +161,9 @@ class UserModel extends Equatable {
     List<String>? followersList,
     List<String>? roles,
     String? currentRole,
+    double? preferredLat,
+    double? preferredLng,
+    String? preferredZip,
   }) {
     return UserModel(
       email: email ?? this.email,
@@ -168,6 +187,9 @@ class UserModel extends Equatable {
       followingList: followingList ?? this.followingList,
       roles: roles ?? this.roles,
       currentRole: currentRole ?? this.currentRole,
+      preferredLat: preferredLat ?? this.preferredLat,
+      preferredLng: preferredLng ?? this.preferredLng,
+      preferredZip: preferredZip ?? this.preferredZip,
     );
   }
 
