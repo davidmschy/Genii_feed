@@ -1,0 +1,57 @@
+{
+  "rules": {
+    // Existing rules for users, properties, agents, etc. should remain here.
+    // ...
+
+    // Rules for geniiPosts (or geniiPosts_dev)
+    // Assuming your posts collection path is determined by `postsCollectionPath`
+    // This example uses "geniiPosts" as a placeholder for the actual path.
+    "geniiPosts": { // Or "geniiPosts_dev"
+      ".read": "auth != null", // Example: Authenticated users can read all posts
+      "$postId": {
+        ".write": "auth != null && (newData.child('userId').val() === auth.uid || !data.exists())",
+        // Example: Authenticated users can create new posts (newData must have their userId)
+        // or update their own existing posts.
+        // For system-generated posts (like by 'genii_bot'), you might need more permissive write rules
+        // or handle this through Admin SDK / Cloud Functions.
+
+        "geo": {
+          // Validate the structure and types of the 'geo' field if it exists
+          // This rule applies if 'geo' is present. If 'geo' is optional and not present, these won't block.
+          // If 'geo' is MANDATORY for all posts, then add a ".validate": "newData.hasChild('geo')" here.
+          ".validate": "newData.hasChildren(['lat', 'lng', 'zip']) || !newData.exists()", // if geo exists, it must have these children
+          "lat": {
+            ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+          },
+          "lng": {
+            ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+          },
+          "zip": {
+            // Basic ZIP code validation: string, 5 digits, or 5+4 format (simple regex)
+            // For stricter validation, you might need more complex regex or Cloud Function validation.
+            // This regex allows "00000" as per defaultGeo.
+            ".validate": "newData.isString() && (newData.val().matches(/^\\\\d{5}$/) || newData.val().matches(/^\\\\d{5}-\\\\d{4}$/) || newData.val() == '00000')"
+          },
+          "$other": { ".validate": false } // No other fields allowed under 'geo'
+        },
+
+        // Ensure other critical fields have correct types if they exist or are mandatory
+        "userId": { ".validate": "newData.isString() && newData.val().length > 0" },
+        "createdAt": { ".validate": "newData.isString() && newData.val().length > 0" }, // Could validate as ISO string
+        "postType": { ".validate": "newData.isString() && newData.val().length > 0" },
+        "eventPayload": { ".validate": "newData.isMap()" }, // Can be more specific if payload structure is fixed per type
+
+        // Optional fields validation (if they exist, they must be of correct type)
+        "propertyId": { ".validate": "!newData.exists() || newData.isString()" },
+        "agentId": { ".validate": "!newData.exists() || newData.isString()" },
+        "status": { ".validate": "!newData.exists() || newData.isString()" },
+        "priority": { ".validate": "!newData.exists() || newData.isNumber()" },
+        "description": { ".validate": "!newData.exists() || newData.isString()" },
+        "parentkey": { ".validate": "!newData.exists() || newData.isString()" },
+        // ... validate other fields as needed
+
+        "$other": { ".validate": false } // No other top-level fields allowed in a post unless defined
+      }
+    }
+  }
+}
